@@ -154,7 +154,7 @@ volatile unsigned encoder_countLeft= 0;  // Contador de pulsos brutos (izquierda
 
 
 
-const int PIN_LEFT = 3 ;// For Arwen and Arduino Nano Every
+//const int PIN_LEFT = 3 ;// For Arwen and Arduino Nano Every
 //const int PIN_LEFT = 2; // For Gandalf and Boromir and Arduino Nano 33IoT
-const int PIN_RIGHT = 5 ;//For Arwen and Arduino Nano Every
+//const int PIN_RIGHT = 5 ;//For Arwen and Arduino Nano Every
 //const int PIN_RIGHT = 3 ;<//For For Gandalf and Boromir and Arduino Nano 33IoT

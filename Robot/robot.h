@@ -23,7 +23,9 @@
 //#define ARDUINO_TYPE_NANO
 
 
-
+// ROBOT TYPE: UNCOMMENT ONLY ONE OPTION
+#define BIGBOT
+//#define SMALLBOT
 
 #pragma once
 #include <Arduino.h>

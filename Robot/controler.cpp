@@ -77,3 +77,6 @@ int controler::feedForward() {
 
 void controler::setSetPoint(double setPoint) { this->setPoint = setPoint; }
 double controler::getSetPoint() { return this->setPoint; }
+
+void controler::setBack(bool back) { this->back = back; }
+bool controler::getBack() { return this->back; }

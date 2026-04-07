@@ -28,11 +28,14 @@ class controler
         int feedForward();
         void setSetPoint(double setPoint);
         double getSetPoint();
+        void  setBack(bool back);
+        bool getBack();
     private:
         unsigned long   currentTime, previousTime=0;;
         double          elapsedTime;
         double          error=0, lastError=0, cumError=0, rateError;
         double         setPoint;
+        bool           back=false;
         double          kp, ki, kd;
         int            PWM;
         double feedForwardParam_A;
