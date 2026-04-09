@@ -3,8 +3,8 @@
 #include <Arduino.h>
 
 // Definiciones basadas en tus archivos
-const int pinEncoderIzquierdo = 2; // Ajusta según tu robot.h
-const int pinEncoderDerecho = 3;   // Ajusta según tu robot.h
+const int pinEncoderIzquierdo = 0; // Ajusta según tu robot.h
+const int pinEncoderDerecho = 1;   // Ajusta según tu robot.h
 
 volatile unsigned long pulsosIzquierdo = 0;
 volatile unsigned long pulsosDerecho = 0;

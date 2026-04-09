@@ -53,7 +53,7 @@ void robot::pinSetup() {
     #ifdef H_BRIDGE_RED
       // Configuración para el Puente en H Rojo
       this->pinENA = 7;  this->pinIN2 = 9;  this->pinIN1 = 8;
-      this->pinIN3 = 11; this->pinIN4 = 12; this->pinENB = 10;      
+      this->pinIN3 = 5; this->pinIN4 = 4; this->pinENB = 3;      
     #endif
   #endif
   

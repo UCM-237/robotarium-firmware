@@ -143,11 +143,11 @@ volatile unsigned long deltaDebounceLeft= 0;
 // Se usan para medir el periodo entre pulsos y derivar la velocidad angular
 volatile unsigned long startTimeLeft= 0;
 volatile unsigned long timeAfterLeft= 0;
-volatile unsigned deltaTimeLeft; // Tiempo entre flancos en la rueda izquierda
+volatile unsigned deltaTimeLeft=1000000000000000; // Tiempo entre flancos en la rueda izquierda
 
 volatile unsigned long startTimeRight= 0;
 volatile unsigned long timeAfterRight= 0;
-volatile unsigned deltaTimeRight; // Tiempo entre flancos en la rueda derecha
+volatile unsigned deltaTimeRight=1000000000000000; // Tiempo entre flancos en la rueda derecha
 
 volatile unsigned encoder_countRight= 0; // Contador de pulsos brutos (derecha)
 volatile unsigned encoder_countLeft= 0;  // Contador de pulsos brutos (izquierda)

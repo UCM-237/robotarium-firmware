@@ -226,7 +226,19 @@ void setup() {
     // ARWEN A= 24.1, B=-155
     wheelControlerLeft.setControlerParam(15.0, 1.0, 0.00);
     wheelControlerLeft.setFeedForwardParam(24.1,-155);
-    
+    // Inicializamos los tiempos para que la resta no dé valores extraños
+    noInterrupts();
+    timeAfterLeft = micros();
+    timeAfterRight = micros();
+    deltaTimeLeft = 0; 
+    deltaTimeRight = 0;
+    interrupts();
+  
+  // Opcional: Si quieres que el filtro empiece "limpio"
+  for(int i=0; i<10; i++) {
+    meanFilterLeft.AddValue(0.0);
+    meanFilterRight.AddValue(0.0);
+  }
 
     // Inicializa la comunicación Serie 1 (pines físicos) con la Raspberry Pi a 9600 baudios
     Serial1.begin(9600);
@@ -312,37 +324,75 @@ void loop() {
   // 3. PREPARACIÓN DE DATOS DE SENSORES
   int auxPWMD = 0, auxPWMI = 0; // Variables auxiliares para evitar enviar PWM repetido
   double fD, fI;                // Frecuencia de los encoders (pulsos por segundo)
-  
-  timeStopD = timeStopI = millis();
-  
-  // Cálculo del tiempo transcurrido desde el último pulso del encoder (Detección de parada)
-  // Si este tiempo es muy alto, asumimos que la rueda no se mueve
-  deltaTimeStopD = timeStopD - timeAfterDebounceRight;
-  deltaTimeStopI = timeStopI - timeAfterDebounceLeft;
-  
-  // Añade los intervalos de tiempo entre pulsos a los filtros de media móvil
-  meanFilterRight.AddValue(deltaTimeRight);
-  meanFilterLeft.AddValue(deltaTimeLeft);
-
   // 4. BUCLE DE CONTROL DE TIEMPO REAL (Ejecutado cada SAMPLINGTIME, ej: 10ms)
   if(currentTime - timeAfter >= SAMPLINGTIME) 
   {
-    // Cálculo de frecuencia (f = 1/T):
-    // Si han pasado más de 100ms sin pulsos (deltaTimeStop >= 100), la frecuencia es 0.
-    // Si no, se calcula: 1 / (tiempo_medio_entre_pulsos * resolución_encoder)
-    fI = deltaTimeStopI >= 100 ? 0 : (double)1 / (meanFilterLeft.GetFiltered() * MAX_ENCODER_STEPS) * 1000;
-    fD = deltaTimeStopD >= 100 ? 0 : (double)1 / (meanFilterRight.GetFiltered() * MAX_ENCODER_STEPS) * 1000;
+    // 1. Obtener el deltaTime de la ISR (usando sección crítica para evitar que cambie a mitad de lectura)
+    noInterrupts();
+    long dtL = deltaTimeLeft;
+    long dtR = deltaTimeRight;
+    interrupts();
+    // 2. Calcular la velocidad instantánea
+    double instantW_L = 0;
+    double instantW_R =0;
+  // 1. Capturamos el tiempo actual
+  unsigned long ahora = micros();
 
-    //condicion para que no supere linealidad y se sature.
-    //es un filtro para que no de valores ridiculos
-    if(fD < double(MAX_OPTIMAL_VEL/2.0/M_PI)) 
-    { 
-      wRight = 2*M_PI*fD; 
-    }
-    if(fI < double(MAX_OPTIMAL_VEL/2.0/M_PI)) 
-    { 
-      wLeft = 2*M_PI*fI; 
-    }
+// 2. Comprobamos si ha pasado mucho tiempo desde el último pulso (ej. 200ms = 200,000 us)
+// Si pasa más de ese tiempo sin interrupciones, la velocidad es 0.
+  if (ahora - timeAfterLeft > 200000) {
+    instantW_L = 0;
+  } 
+  else {
+    // Solo calculamos si hay un tiempo válido
+    if (deltaTimeLeft > 0) 
+      instantW_L = (2.0 * M_PI * 1000000.0) / (deltaTimeLeft * 20.0);
+  }
+
+  if (ahora - timeAfterRight > 200000) {
+    instantW_R = 0;
+  } 
+  else {
+    if (deltaTimeRight > 0) 
+      instantW_R = (2.0 * M_PI * 1000000.0) / (deltaTimeRight * 20.0);
+  }
+
+// 3. Aplicar signo según la dirección (backI, backD)
+  if (backI) instantW_L *= -1.0;
+  if (backD) instantW_R *= -1.0;
+  // IMPORTANTE: Limitar la velocidad máxima para evitar picos por ruido
+    if (instantW_R > MAX_OPTIMAL_VEL) instantW_R = MAX_OPTIMAL_VEL;
+    if (instantW_L > MAX_OPTIMAL_VEL) instantW_L = MAX_OPTIMAL_VEL;
+
+    // 3. PASAR POR EL FILTRO
+    meanFilterLeft.AddValue(instantW_L);
+    meanFilterRight.AddValue(instantW_R);
+
+    // 4. USAR EL VALOR FILTRADO PARA EL CONTROL Y TELEMETRÍA
+    double wLeft = meanFilterLeft.GetFiltered();
+    double wRight = meanFilterRight.GetFiltered();
+
+    // 5. CINEMÁTICA DEL ROBOT (Estimación de velocidad del chasis)
+    // v = w * r
+    double vL = wLeft * robot.getRobotWheelRadius();
+    double vR = wRight* robot.getRobotWheelRadius();
+  
+    double V_robot = (vR + vL) / 2.0;                    // Velocidad lineal (cm/s)
+    double W_robot = (vR - vL) / robot.getRobotDiameter(); // Velocidad angular (rad/s)
+    
+    // DEBUG
+    static unsigned long ultimaImpresion = 0;
+    if (millis() - ultimaImpresion > 250) { // Imprime cada 250ms
+      DEBUG_PRINT("wLeft: "); 
+      DEBUG_PRINT(wLeft);
+      DEBUG_PRINT(" wRight: "); 
+      DEBUG_PRINTLN(wRight);
+      DEBUG_PRINT("v(cm/s): "); 
+      DEBUG_PRINT(V_robot);
+      DEBUG_PRINT(" w(rad/s): "); 
+      DEBUG_PRINTLN(W_robot);
+      ultimaImpresion = millis();
+  }
     
     // 5. ALGORITMO DE CONTROL PID
     if(control)
@@ -369,22 +419,7 @@ void loop() {
     robot.moveLeftWheel(PWM_Left, wheelControlerLeft.getSetPoint(), wheelControlerLeft.getBack());
     robot.moveRightWheel(PWM_Right, wheelControlerRight.getSetPoint(),wheelControlerRight.getBack());
 
-  // 7. ESTABILIZACIÓN DE SENSORES:
-  // Se fuerzan 10 lecturas iniciales en el filtro de media móvil para que 
-  // el sistema de control de velocidad no herede datos de cuando el robot estaba en otro estado.
-  for(int i=0; i<10; i++)
-  {
-    meanFilterRight.AddValue(deltaTimeRight);
-    meanFilterLeft.AddValue(deltaTimeLeft);
-  }
-     // Impresión de depuración de velocidades angulares si hay movimiento
-     /* if(wRight > 0){
-        DEBUG_PRINT("wRight:");
-        DEBUG_PRINT(wRight);
-        DEBUG_PRINT(" wLeft:");
-        DEBUG_PRINTLN(wLeft);
-        
- }*/
+ 
     }   
    // 6. ACTUALIZACIÓN DE MOTORES (Escritura en Hardware)
     // Solo envía la instrucción al puente en H si el valor de PWM ha cambiado
@@ -953,33 +988,16 @@ void op_done()
  */
 void isrRight() {
   // 1. GESTIÓN DE REBOTES (Debouncing)
-  timeBeforeDebounceRight = millis(); // Captura el tiempo actual del pulso
-  deltaDebounceRight = timeBeforeDebounceRight - timeAfterDebounceRight; // Tiempo desde el último pulso (aunque fuera ruido)
-
+ unsigned long ahora=micros(); // Captura el tiempo actual del pulso
+ 
   // Solo procesamos el pulso si ha pasado suficiente tiempo (TIMEDEBOUNCE)
   // Esto filtra picos de voltaje o vibraciones mecánicas que darían velocidades falsas
-  if(deltaDebounceRight > TIMEDEBOUNCE) {
+  if(ahora-timeAfterRight > TIMEDEBOUNCE) {
     
-    // 2. CONTEO DE ODOMETRÍA
-    startTimeRight = millis(); // Marca el tiempo de inicio de este pulso "válido"
     encoder_countRight++;      // Incrementa el contador total de pasos
-    
-    // Si llegamos al número de pasos por vuelta, incrementamos el contador de vueltas completas
-    if(encoder_countRight == MAX_ENCODER_STEPS) {
-      wheelTurnCounterRight++;
+    deltaTimeRight = ahora - timeAfterRight;
+    timeAfterRight=ahora;
     }
-
-    // 3. CÁLCULO DE VELOCIDAD (Delta Time)
-    // Calcula el tiempo exacto transcurrido entre este pulso y el anterior
-    // Este valor es inversamente proporcional a la velocidad de la rueda
-    deltaTimeRight = startTimeRight - timeAfterRight;
-     
-    // Guarda este instante para compararlo con el próximo pulso
-    timeAfterRight = startTimeRight;
-  }
-  
-  // Actualiza el registro de tiempo para el siguiente chequeo de rebote
-  timeAfterDebounceRight = timeBeforeDebounceRight;   
 }
 
 /**
@@ -987,27 +1005,17 @@ void isrRight() {
  * Realiza la misma lógica de filtrado y conteo para el motor izquierdo.
  */
 void isrLeft() {
-  timeBeforeDebounceLeft = millis();
-  deltaDebounceLeft = timeBeforeDebounceLeft - timeAfterDebounceLeft;
+  // 1. GESTIÓN DE REBOTES (Debouncing)
+  unsigned long ahora=micros(); // Captura el tiempo actual del pulso
 
-  if(deltaDebounceLeft > TIMEDEBOUNCE) {
-    startTimeLeft = millis();
-    encoder_countLeft++; 
-
-    if(encoder_countLeft == MAX_ENCODER_STEPS) {
-      wheelTurnCounterLeft++;
+  // Solo procesamos el pulso si ha pasado suficiente tiempo (TIMEDEBOUNCE)
+  // Esto filtra picos de voltaje o vibraciones mecánicas que darían velocidades falsas
+  if(ahora-timeAfterLeft > TIMEDEBOUNCE) {
+    
+    encoder_countLeft++;      // Incrementa el contador total de pasos
+    deltaTimeLeft = ahora - timeAfterLeft;
+    timeAfterLeft=ahora;
     }
-   // 3. CÁLCULO DE VELOCIDAD (Delta Time)
-    // Calcula el tiempo exacto transcurrido entre este pulso y el anterior
-    // Este valor es inversamente proporcional a la velocidad de la rueda
-    deltaTimeLeft = startTimeLeft - timeAfterLeft;
-     
-    // Guarda este instante para compararlo con el próximo pulso
-    timeAfterLeft = startTimeLeft;
-  }
-  
-  // Actualiza el registro de tiempo para el siguiente chequeo de rebote
-  timeAfterDebounceLeft = timeBeforeDebounceLeft;   
 
 }
 /* TODO: Revisar esta version mejorada no bloqueante  
