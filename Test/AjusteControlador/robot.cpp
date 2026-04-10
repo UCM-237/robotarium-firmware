@@ -42,7 +42,7 @@ IN 2    9
 void robot::pinSetup() {
   #ifdef ARDUINO_TYPE_MKR
     this->pinLeftEncoder = 0;  // Pin interrupción izquierda MKR
-    this->pinRightEncoder = 1; // Pin interrupción derecha MKR
+    this->pinRightEncoder = 1 ; // Pin interrupción derecha MKR
 
     #ifdef H_BRIDGE_BLACK
       // Configuración para el Puente en H Negro (L298N o similar)

@@ -150,8 +150,9 @@ volatile unsigned long timeAfterRight= 0;
 volatile unsigned deltaTimeRight=1000000000000000; // Tiempo entre flancos en la rueda derecha
 
 volatile unsigned encoder_countRight= 0; // Contador de pulsos brutos (derecha)
+volatile unsigned encodercountLeftAnt=0;
 volatile unsigned encoder_countLeft= 0;  // Contador de pulsos brutos (izquierda)
-
+volatile unsigned encodercountRightAnt=0;
 
 
 //const int PIN_LEFT = 3 ;// For Arwen and Arduino Nano Every

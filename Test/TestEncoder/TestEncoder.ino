@@ -3,8 +3,8 @@
 #include <Arduino.h>
 
 // Definiciones basadas en tus archivos
-const int pinEncoderIzquierdo = 0; // Ajusta según tu robot.h
-const int pinEncoderDerecho = 1;   // Ajusta según tu robot.h
+const int pinEncoderIzquierdo = 1; // Ajusta según tu robot.h
+const int pinEncoderDerecho = 0;   // Ajusta según tu robot.h
 
 volatile unsigned long pulsosIzquierdo = 0;
 volatile unsigned long pulsosDerecho = 0;
@@ -14,7 +14,7 @@ volatile unsigned long deltaTimeIzquierdo = 0;
 volatile unsigned long deltaTimeDerecho = 0;
 
 // Umbral de debounce: 1000 microsegundos (1ms)
-const unsigned long DEBOUNCE_TIME = 1000; 
+const unsigned long DEBOUNCE_TIME = 30000; 
 
 void isrIzquierda() {
   unsigned long ahora = micros();
@@ -39,8 +39,8 @@ void setup() {
   pinMode(pinEncoderIzquierdo, INPUT_PULLUP);
   pinMode(pinEncoderDerecho, INPUT_PULLUP);
   
-  attachInterrupt(digitalPinToInterrupt(pinEncoderIzquierdo), isrIzquierda, RISING);
-  attachInterrupt(digitalPinToInterrupt(pinEncoderDerecho), isrDerecha, RISING);
+  attachInterrupt(digitalPinToInterrupt(pinEncoderIzquierdo), isrIzquierda, FALLING);
+  attachInterrupt(digitalPinToInterrupt(pinEncoderDerecho), isrDerecha, FALLING);
   
   Serial.println("--- Test de Encoders Iniciado ---");
 }

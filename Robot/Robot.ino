@@ -51,8 +51,8 @@ unsigned char packetBuffer[256]; // Buffer para almacenar paquetes recibidos por
 
 /// --- FILTROS Y ESTABILIZACIÓN ---
 // Filtros de media móvil para suavizar las lecturas de velocidad de los encoders (ventana de 10 muestras)
-MeanFilter<long> meanFilterRight(10);
-MeanFilter<long> meanFilterLeft(10);
+MeanFilter<double> meanFilterRight(10);
+MeanFilter<double> meanFilterLeft(10);
 const double MAX_OPTIMAL_VEL=20; // Límite de seguridad en rad/s
 
 // --- VARIABLES DE OPERACIÓN Y COMUNICACIÓN ---
@@ -98,6 +98,7 @@ int led = 13;          // LED integrado para señalización visual de estado
 unsigned long previous_timer;
 unsigned long timer = 10000;
 unsigned long currentTime, timeAfter;
+unsigned long lastMillis=0;
 
 
 // --- VARIABLES COMUNES DE CONTROL Y ESTADO ---
@@ -121,7 +122,7 @@ const unsigned long TELEMETRYTIME = 1000;
 // wLeft: velocidad de la rueda izquierda | wRight: velocidad de la rueda derecha
 // Estos valores provienen directamente del cálculo basado en los pulsos de los encoders
 double wLeft, wRight;
-
+double WMIN =1.0; //(rad/s minimos para las ruedas)
 // Bandera de inicio o "número mágico" para la validación de paquetes.
 // Se usa para asegurar que el primer byte que recibe el Arduino es realmente
 // el comienzo de un mensaje válido y no ruido o datos corruptos.
@@ -219,13 +220,13 @@ void setup() {
     // setControlerParam: Ajusta las constantes PID (Kp=15, Ki=1, Kd=0.00)
     // setFeedForwardParam: Ajusta la compensación directa (Pendiente=14, Offset=-24.4)
     wheelControlerRight.setControlerParam(15.0, 1.0, 0.00);
-    wheelControlerRight.setFeedForwardParam(24.1, -155);
+    wheelControlerRight.setFeedForwardParam(85,-90);
   
     // Configuración del controlador de la rueda izquierda:
     // Los parámetros varían ligeramente para compensar diferencias mecánicas entre motores
     // ARWEN A= 24.1, B=-155
     wheelControlerLeft.setControlerParam(15.0, 1.0, 0.00);
-    wheelControlerLeft.setFeedForwardParam(24.1,-155);
+    wheelControlerLeft.setFeedForwardParam(85,-90);
     // Inicializamos los tiempos para que la resta no dé valores extraños
     noInterrupts();
     timeAfterLeft = micros();
@@ -323,14 +324,15 @@ void loop() {
   
   // 3. PREPARACIÓN DE DATOS DE SENSORES
   int auxPWMD = 0, auxPWMI = 0; // Variables auxiliares para evitar enviar PWM repetido
-  double fD, fI;                // Frecuencia de los encoders (pulsos por segundo)
-  // 4. BUCLE DE CONTROL DE TIEMPO REAL (Ejecutado cada SAMPLINGTIME, ej: 10ms)
-  if(currentTime - timeAfter >= SAMPLINGTIME) 
-  {
+     // 4. BUCLE DE LECTURA DE ENCODERS(Ejecutado cada SAMPLINGTIME, ej: 10ms)
+    
+  if ((currentTime - timeAfter)>= 10) {
     // 1. Obtener el deltaTime de la ISR (usando sección crítica para evitar que cambie a mitad de lectura)
     noInterrupts();
     long dtL = deltaTimeLeft;
     long dtR = deltaTimeRight;
+    long encoderR=encoder_countRight;
+    long encoderL=encoder_countLeft;
     interrupts();
     // 2. Calcular la velocidad instantánea
     double instantW_L = 0;
@@ -345,16 +347,19 @@ void loop() {
   } 
   else {
     // Solo calculamos si hay un tiempo válido
-    if (deltaTimeLeft > 0) 
-      instantW_L = (2.0 * M_PI * 1000000.0) / (deltaTimeLeft * 20.0);
+    if (deltaTimeLeft > 0) {
+       instantW_L = (M_PI /10.0) *(encoderL-encodercountLeftAnt)* 1000000 / (deltaTimeLeft );
+       encodercountLeftAnt=encoderL;
+    }
   }
-
   if (ahora - timeAfterRight > 200000) {
     instantW_R = 0;
   } 
   else {
-    if (deltaTimeRight > 0) 
-      instantW_R = (2.0 * M_PI * 1000000.0) / (deltaTimeRight * 20.0);
+    if (deltaTimeRight > 0) {
+      instantW_R=(M_PI /10.0) *(encoderR-encodercountRightAnt)* 1000000 / (deltaTimeRight );
+      encodercountRightAnt=encoderR;
+    }
   }
 
 // 3. Aplicar signo según la dirección (backI, backD)
@@ -367,8 +372,7 @@ void loop() {
     // 3. PASAR POR EL FILTRO
     meanFilterLeft.AddValue(instantW_L);
     meanFilterRight.AddValue(instantW_R);
-
-    // 4. USAR EL VALOR FILTRADO PARA EL CONTROL Y TELEMETRÍA
+  // 4. USAR EL VALOR FILTRADO PARA EL CONTROL Y TELEMETRÍA
     double wLeft = meanFilterLeft.GetFiltered();
     double wRight = meanFilterRight.GetFiltered();
 
@@ -379,20 +383,7 @@ void loop() {
   
     double V_robot = (vR + vL) / 2.0;                    // Velocidad lineal (cm/s)
     double W_robot = (vR - vL) / robot.getRobotDiameter(); // Velocidad angular (rad/s)
-    
-    // DEBUG
-    static unsigned long ultimaImpresion = 0;
-    if (millis() - ultimaImpresion > 250) { // Imprime cada 250ms
-      DEBUG_PRINT("wLeft: "); 
-      DEBUG_PRINT(wLeft);
-      DEBUG_PRINT(" wRight: "); 
-      DEBUG_PRINTLN(wRight);
-      DEBUG_PRINT("v(cm/s): "); 
-      DEBUG_PRINT(V_robot);
-      DEBUG_PRINT(" w(rad/s): "); 
-      DEBUG_PRINTLN(W_robot);
-      ultimaImpresion = millis();
-  }
+
     
     // 5. ALGORITMO DE CONTROL PID
     if(control)
@@ -400,9 +391,39 @@ void loop() {
     // 5. CÁLCULO DE POTENCIA INICIAL (FeedForward):
     // El FeedForward estima el PWM necesario basándose en la velocidad deseada 
     // antes de que el PID empiece a corregir errores.
+    int pwm_ff_l=0,pwm_ff_r=0,pwm_pid_l=0,pwm_pid_r=0;
+    pwm_ff_l=wheelControlerLeft.feedForward();
+    pwm_ff_r=wheelControlerRight.feedForward();
+    pwm_pid_l=wheelControlerLeft.pid(wLeft);
+    pwm_pid_r=wheelControlerRight.pid(wRight);
+    
     PWM_Left = constrain(wheelControlerLeft.feedForward()+wheelControlerLeft.pid(wLeft),MINPWM,MAXPWM);
     PWM_Right = constrain(wheelControlerRight.feedForward()+wheelControlerRight.pid(wRight),MINPWM,MAXPWM);
-  
+    // DEBUG
+    static unsigned long ultimaImpresion = 0;
+    if (millis() - ultimaImpresion > 1250) { // Imprime cada 250ms
+      DEBUG_PRINT("wLeft: "); 
+      DEBUG_PRINT(wLeft);
+      DEBUG_PRINT(" wRight: "); 
+      DEBUG_PRINTLN(wRight);
+      DEBUG_PRINT("v(cm/s): "); 
+      DEBUG_PRINT(V_robot);
+      DEBUG_PRINT("w(rad/s): "); 
+      DEBUG_PRINTLN(W_robot);
+      DEBUG_PRINT(" pwm_ff_d: ");
+      DEBUG_PRINT( pwm_ff_r);
+      DEBUG_PRINT(" pwm_pid_d: ");
+      DEBUG_PRINT( pwm_pid_r);
+      DEBUG_PRINT(" pwm_de: ");
+      DEBUG_PRINTLN( PWM_Right);
+      DEBUG_PRINT(" pwm_ff_l: ");
+      DEBUG_PRINT( pwm_ff_l);
+      DEBUG_PRINT(" pwm_pid_l: ");
+      DEBUG_PRINT( pwm_pid_l);
+      DEBUG_PRINT(" pwm_iz: ");
+      DEBUG_PRINTLN( PWM_Left);
+      ultimaImpresion = millis();
+  }
     /*DEBUG_PRINT("PWM_Left: ");
     DEBUG_PRINT(PWM_Left);
     DEBUG_PRINT(" Left FWR: ");
@@ -445,9 +466,10 @@ void loop() {
     }
     
     // Actualiza la marca de tiempo para el próximo ciclo de muestreo
-    timeAfter = currentTime; 
+  timeAfter = currentTime; 
   }
- }  
+   
+}  
 
 
 /**
@@ -610,6 +632,14 @@ void op_moveRobot() {
     op_StopRobot();
     return;
   }
+  // 2. PROTECCION VELOCIDAD MINIMA
+  if (setpointWRight < WMIN && setpointWRight > -WMIN){
+    setpointWRight=0.0;
+  }
+  if (setpointWLeft < WMIN && setpointWLeft > -WMIN){
+    setpointWLeft=0.0;
+  }
+  
   // 3. LÓGICA DE DIRECCIÓN (Rueda Derecha):
   // Si el valor es negativo, el robot debe ir hacia atrás.
   if(setpointWRight < 0) {
@@ -800,14 +830,14 @@ void op_turn_robot()
    // Girar a la derecha: Rueda izquierda adelante, Rueda derecha atrás
     if(turnRight<0)
     {
-      robot.moveLeftWheel(150, 1, true);
-      robot.moveRightWheel(150, 1, false);
+      robot.moveLeftWheel(120, 1, true);
+      robot.moveRightWheel(120, 1, false);
     }
     else
     {
       // Girar a la izquierda: Rueda izquierda atrás, Rueda derecha adelante
-      robot.moveLeftWheel(150, 1, false);
-      robot.moveRightWheel(150, 1, true);
+      robot.moveLeftWheel(120, 1, false);
+      robot.moveRightWheel(120, 1, true);
     }
   }
 

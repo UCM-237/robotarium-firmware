@@ -130,7 +130,8 @@ bool backD=false, backI=false;
 
 // --- FILTRO DE DEBOUNCE (ANTI-REBOTES) ---
 // Evita lecturas erróneas por ruido eléctrico en las interrupciones del encoder
-unsigned long TIMEDEBOUNCE = 1; // Tiempo mínimo (ms) entre pulsos válidos
+// Umbral de debounce: 1000 microsegundos (1ms)
+const unsigned long DEBOUNCE_TIME =  30000;
 volatile unsigned long timeAfterDebounceRight= 0;
 volatile unsigned long timeBeforeDebounceRight=0;
 volatile unsigned long deltaDebounceRight= 0;
@@ -151,3 +152,6 @@ volatile unsigned long deltaTimeRight; // Tiempo entre flancos en la rueda derec
 
 volatile unsigned encoder_countRight= 0; // Contador de pulsos brutos (derecha)
 volatile unsigned encoder_countLeft= 0;  // Contador de pulsos brutos (izquierda)
+
+volatile unsigned encodercountRightAnt= 0; // Contador de pulsos brutos (derecha)
+volatile unsigned encodercountLeftAnt= 0;  // Contador de pulsos brutos (izquierda)
