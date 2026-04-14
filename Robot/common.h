@@ -123,14 +123,17 @@ double SetpointD, SetpointI, SetpointAnterior=0;
 bool backD=false, backI=false;
 
 // Constantes de configuración de potencia y límites operativos
-#define MINPWM 100      // PWM mínimo para que el motor se mueva
+#define MINPWM_R 100      // PWM mínimo para que el motor se mueva
+#define MINPWM_L 80      // PWM mínimo para que el motor se mueva
 #define MAXPWM 255      // PWM máximo (100% potencia)
 #define LIM_LINEAL 13.5 
 #define MINSETPOINT 5.5 // Velocidad mínima en rad/s para evitar la zona muerta
 
 // --- FILTRO DE DEBOUNCE (ANTI-REBOTES) ---
 // Evita lecturas erróneas por ruido eléctrico en las interrupciones del encoder
-unsigned long TIMEDEBOUNCE = 12; // Tiempo mínimo (ms) entre pulsos válidos
+unsigned long TIMEDEBOUNCE_L = 12; // Tiempo mínimo (ms) entre pulsos válidos
+unsigned long TIMEDEBOUNCE_R = 100; // Tiempo mínimo (ms) entre pulsos válidos
+
 volatile unsigned long timeAfterDebounceRight= 0;
 volatile unsigned long timeBeforeDebounceRight=0;
 volatile unsigned long deltaDebounceRight= 0;

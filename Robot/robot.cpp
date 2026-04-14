@@ -62,7 +62,7 @@ void robot::pinSetup() {
   #endif
   
   #ifdef ARDUINO_TYPE_NANO
-    this->pinLeftEncoder = 2;  this->pinRightEncoder = 3; 
+    this->pinLeftEncoder = 3;  this->pinRightEncoder = 2; 
     // (Configuraciones de pines para Nano...)
      #ifdef H_BRIDGE_BLACK
       // Configuración para el Puente en H Negro (L298N o similar)
@@ -80,7 +80,7 @@ void robot::pinSetup() {
 
   // Asignación de arrays para facilitar el manejo de motores [ENABLE, IN1, IN2]
   this->pinMotorRight[0] = pinENA; this->pinMotorRight[1] = pinIN1; this->pinMotorRight[2] = pinIN2;
-  this->pinMotorLeft[0] = pinENB;  this->pinMotorLeft[1] = pinIN3;  this->pinMotorLeft[2] = pinIN4;
+  this->pinMotorLeft[0] = pinENB;  this->pinMotorLeft[1] = pinIN4;  this->pinMotorLeft[2] = pinIN3;
 }
 
 // Configura todos los pines de control como salida

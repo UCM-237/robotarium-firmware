@@ -32,13 +32,13 @@
 
 // --- CONFIGURACIÓN DEL TEST ---
 double VELOCIDAD_OBJETIVO = 0.01; // rad/s (ajusta según necesites)
-bool TEST_RUEDA_DERECHA =false;   // true para derecha, false para izquierda
+bool TEST_RUEDA_DERECHA =true;   // true para derecha, false para izquierda
 bool BACKWARDS= false; // true rueda hacia atras, false hacia adelante
 // ------------------------------
 // Uncomment only one
-#define  AJUSTEFF
+//#define  AJUSTEFF
 //#define TESTFF
-//#define AJUSTEPID
+#define AJUSTEPID
 //------------------------------
 int pwm_output=60;
 double w_objetivo=VLMIN;
@@ -58,7 +58,7 @@ void setup() {
   miRobot.pinSetup();
   miRobot.motorSetup();
   // Paso 1: Objetivo realista (aprox 2 vueltas por segundo)
-  VELOCIDAD_OBJETIVO = 2.0; 
+  VELOCIDAD_OBJETIVO = 1.0; 
   PID_RuedaL.setSetPoint(VELOCIDAD_OBJETIVO);
   PID_RuedaR.setSetPoint(VELOCIDAD_OBJETIVO);
   
@@ -71,12 +71,12 @@ void setup() {
    *  A=18.75
    *  B=-68,75
    */
-  PID_RuedaL.setFeedForwardParam(85,-90);
-  PID_RuedaR.setFeedForwardParam(85,-90);
+  PID_RuedaL.setFeedForwardParam(123,-50);
+  PID_RuedaR.setFeedForwardParam(130.3,-135.8);
   // Paso 2: Solo proporcional (Kp). Ki y Kd a CERO.
   // Un Kp de 2.0 o 5.0 es un buen inicio para motores de bajo coste.
-  PID_RuedaL.setControlerParam(10.0, 0.0,0.0);
-  PID_RuedaR.setControlerParam(2.0, 0.0,0.0);
+  PID_RuedaL.setControlerParam(50.0,1.0,1.0);
+  PID_RuedaR.setControlerParam(50.0, 1.0,1.0);
   // Configuración de interrupciones para encoders (necesario para calcular w real)
   attachInterrupt(digitalPinToInterrupt(miRobot.getPinLeftEncoder()), isrLeft, FALLING);
   attachInterrupt(digitalPinToInterrupt(miRobot.getPinRightEncoder()), isrRight, FALLING);
@@ -210,8 +210,8 @@ void loop() {
   // Ejecutamos el bucle de control cada 10ms (100Hz) como en tu Robot.ino original
   if (millis() - tpwmant>= 1000) {
     
-     w_objetivo+=0.5;
-     if(w_objetivo>40) w_objetivo=40;
+     w_objetivo+=0.1;
+     if(w_objetivo>4) w_objetivo=4;
      double w_real;
 
     if (TEST_RUEDA_DERECHA) {
@@ -247,7 +247,7 @@ tpwmant=millis();
 
   // Ejecutamos el bucle de control cada 10ms (100Hz) como en tu Robot.ino original
   if((millis()-tpwmant)>10){
-     w_objetivo=2.4;
+     w_objetivo=2.0;
      int pwm_pid=0;
 
     if (TEST_RUEDA_DERECHA) {

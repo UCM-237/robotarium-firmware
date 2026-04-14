@@ -220,13 +220,13 @@ void setup() {
     // setControlerParam: Ajusta las constantes PID (Kp=15, Ki=1, Kd=0.00)
     // setFeedForwardParam: Ajusta la compensación directa (Pendiente=14, Offset=-24.4)
     wheelControlerRight.setControlerParam(15.0, 1.0, 0.00);
-    wheelControlerRight.setFeedForwardParam(85,-90);
+    wheelControlerRight.setFeedForwardParam(130.3,-90.8);
   
     // Configuración del controlador de la rueda izquierda:
     // Los parámetros varían ligeramente para compensar diferencias mecánicas entre motores
     // ARWEN A= 24.1, B=-155
     wheelControlerLeft.setControlerParam(15.0, 1.0, 0.00);
-    wheelControlerLeft.setFeedForwardParam(85,-90);
+    wheelControlerLeft.setFeedForwardParam(123,-100);
     // Inicializamos los tiempos para que la resta no dé valores extraños
     noInterrupts();
     timeAfterLeft = micros();
@@ -347,8 +347,8 @@ void loop() {
   } 
   else {
     // Solo calculamos si hay un tiempo válido
-    if (deltaTimeLeft > 0) {
-       instantW_L = (M_PI /10.0) *(encoderL-encodercountLeftAnt)* 1000000 / (deltaTimeLeft );
+    if (dtL > 0) {
+       instantW_L = (M_PI /10.0) *(encoderL-encodercountLeftAnt)* 1000000 / (dtL );
        encodercountLeftAnt=encoderL;
     }
   }
@@ -356,8 +356,8 @@ void loop() {
     instantW_R = 0;
   } 
   else {
-    if (deltaTimeRight > 0) {
-      instantW_R=(M_PI /10.0) *(encoderR-encodercountRightAnt)* 1000000 / (deltaTimeRight );
+    if (dtR > 0) {
+      instantW_R=(M_PI /10.0) *(encoderR-encodercountRightAnt)* 1000000 / (dtR );
       encodercountRightAnt=encoderR;
     }
   }
@@ -397,8 +397,8 @@ void loop() {
     pwm_pid_l=wheelControlerLeft.pid(wLeft);
     pwm_pid_r=wheelControlerRight.pid(wRight);
     
-    PWM_Left = constrain(wheelControlerLeft.feedForward()+wheelControlerLeft.pid(wLeft),MINPWM,MAXPWM);
-    PWM_Right = constrain(wheelControlerRight.feedForward()+wheelControlerRight.pid(wRight),MINPWM,MAXPWM);
+    PWM_Left = constrain(wheelControlerLeft.feedForward()+wheelControlerLeft.pid(wLeft),MINPWM_L,MAXPWM);
+    PWM_Right = constrain(wheelControlerRight.feedForward()+wheelControlerRight.pid(wRight),MINPWM_R,MAXPWM);
     // DEBUG
     static unsigned long ultimaImpresion = 0;
     if (millis() - ultimaImpresion > 1250) { // Imprime cada 250ms
@@ -1022,7 +1022,7 @@ void isrRight() {
  
   // Solo procesamos el pulso si ha pasado suficiente tiempo (TIMEDEBOUNCE)
   // Esto filtra picos de voltaje o vibraciones mecánicas que darían velocidades falsas
-  if(ahora-timeAfterRight > TIMEDEBOUNCE) {
+  if(ahora-timeAfterRight > TIMEDEBOUNCE_R) {
     
     encoder_countRight++;      // Incrementa el contador total de pasos
     deltaTimeRight = ahora - timeAfterRight;
@@ -1040,7 +1040,7 @@ void isrLeft() {
 
   // Solo procesamos el pulso si ha pasado suficiente tiempo (TIMEDEBOUNCE)
   // Esto filtra picos de voltaje o vibraciones mecánicas que darían velocidades falsas
-  if(ahora-timeAfterLeft > TIMEDEBOUNCE) {
+  if(ahora-timeAfterLeft > TIMEDEBOUNCE_L) {
     
     encoder_countLeft++;      // Incrementa el contador total de pasos
     deltaTimeLeft = ahora - timeAfterLeft;
