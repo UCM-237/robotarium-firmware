@@ -27,6 +27,10 @@
 #define BIGBOT
 //#define SMALLBOT
 
+// ENCODER TYPE
+#define ENCODER_CUADRATURA
+
+
 #pragma once
 #include <Arduino.h>
 
@@ -52,7 +56,8 @@ class robot
 
         int getPinLeftEncoder();
         int getPinRightEncoder();
-        
+        int getPinLeftEncoderB();
+        int getPinRightEncoderB();
 
     private:
         int pinIN1;
@@ -66,7 +71,10 @@ class robot
 
         int pinLeftEncoder;
         int pinRightEncoder;
-        
+        int channelPinA_R;
+        int channelPinB_R;
+        int channelPinA_L;
+        int channelPinB_L;
 
 
         double RobotWheelDiamter = 6.7;

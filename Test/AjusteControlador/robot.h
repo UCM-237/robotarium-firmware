@@ -18,9 +18,9 @@
 #define H_BRIDGE_RED
 
 // ARDUINO TYPE: UNCOMMENT ONLY ONE OPTION
-//#define ARDUINO_TYPE_MKR
-#define ARDUINO_TYPE_NANO
-
+#define ARDUINO_TYPE_MKR
+//#define ARDUINO_TYPE_NANO
+#define ENCODER_CUADRATURA
 
 
 
@@ -43,6 +43,8 @@ class robot
         uint8_t getRobotID();
         int getPinLeftEncoder();
         int getPinRightEncoder();
+        int getPinLeftEncoderB();
+        int getPinRightEncoderB();
         
        
     private:
@@ -56,6 +58,11 @@ class robot
         int pinMotorLeft[3];
         int pinLeftEncoder;
         int pinRightEncoder;
+        int channelPinA_R;
+        int channelPinB_R;
+        int channelPinA_L;
+        int channelPinB_L;
+
         
 
         double RobotWheelDiamter = 6.7;

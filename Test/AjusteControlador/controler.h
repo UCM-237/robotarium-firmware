@@ -13,10 +13,10 @@
  #pragma once
 #include <Arduino.h>
 
-#define MINPWM 100
-#define MAXPWM 250
-#define VRMIN 1.81
-#define VLMIN 1.26  
+#define MINPWM 55
+#define MAXPWM 255
+#define VRMIN 4.85
+#define VLMIN 4.64  
 class controler
 {
     public:

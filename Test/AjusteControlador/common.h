@@ -20,7 +20,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include "operation.h"
-
+#define ENCODER_CUADRATURA
 // Tamaño máximo del paquete de datos que el Arduino puede procesar por Serial
 const int MAXDATASIZE=255; 
 // Tamaño de la cabecera calculada como 5 enteros (InitFlag, id, op, len...)
@@ -95,6 +95,19 @@ short bytesToShort(unsigned char *b) {
     return(x.i);
 }
 
+#ifdef ENCODER_CUADRATURA
+
+volatile long countsL = 0;
+volatile long countsR = 0;
+
+// Variables para almacenar el estado anterior
+volatile byte lastStateL = 0;
+volatile byte lastStateR = 0;
+
+const int MAX_ENCODER_STEPS=2800;
+
+
+#else
 // --- VARIABLES DE CONTROL DE ENCODER ---
 const int MAX_ENCODER_STEPS = 20; // Resolución física: pasos por vuelta del encoder
 
@@ -113,21 +126,6 @@ volatile unsigned long timeStopD= 0;
 volatile unsigned long timeStopI= 0;
 volatile unsigned long deltaTimeStopD;
 volatile unsigned long deltaTimeStopI;
-
-// --- CONTROL DE MOTORES Y PWM ---
-int PWM_Right=0; // Valor actual de PWM enviado al motor derecho
-int PWM_Left=0;  // Valor actual de PWM enviado al motor izquierdo
-
-// Setpoints de velocidad y banderas de dirección (back = marcha atrás)
-double SetpointD, SetpointI, SetpointAnterior=0;
-bool backD=false, backI=false;
-
-// Constantes de configuración de potencia y límites operativos
-#define MINPWM 100      // PWM mínimo para que el motor se mueva
-#define MAXPWM 255      // PWM máximo (100% potencia)
-#define LIM_LINEAL 13.5 
-#define MINSETPOINT 5.5 // Velocidad mínima en rad/s para evitar la zona muerta
-
 // --- FILTRO DE DEBOUNCE (ANTI-REBOTES) ---
 // Evita lecturas erróneas por ruido eléctrico en las interrupciones del encoder
 // Umbral de debounce: 1000 microsegundos (1ms)
@@ -153,5 +151,19 @@ volatile unsigned long deltaTimeRight; // Tiempo entre flancos en la rueda derec
 volatile unsigned encoder_countRight= 0; // Contador de pulsos brutos (derecha)
 volatile unsigned encoder_countLeft= 0;  // Contador de pulsos brutos (izquierda)
 
+
+#endif
 volatile unsigned encodercountRightAnt= 0; // Contador de pulsos brutos (derecha)
 volatile unsigned encodercountLeftAnt= 0;  // Contador de pulsos brutos (izquierda)
+
+// --- CONTROL DE MOTORES Y PWM ---
+int PWM_Right=0; // Valor actual de PWM enviado al motor derecho
+int PWM_Left=0;  // Valor actual de PWM enviado al motor izquierdo
+
+// Setpoints de velocidad y banderas de dirección (back = marcha atrás)
+double SetpointD, SetpointI, SetpointAnterior=0;
+bool backD=false, backI=false;
+
+
+#define LIM_LINEAL 13.5 
+#define MINSETPOINT 5.5 // Velocidad mínima en rad/s para evitar la zona muerta

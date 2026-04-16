@@ -11,32 +11,7 @@
  */
 #include "robot.h"
 
-/*
-Boromir, Arwen y Gandalf tiene los pines del motor de la siguiente manera
-Motor Izquierdo:
-ENABLE  9
-IN 1    8
-IN 2    7
 
-Motor Derecho:
-ENABLE  10
-IN 1    11
-IN 2    12
-
-<<<<<<< HEAD
-En el Arduino MKR el pin 9 no puede usarse para el ENABLE. Así que:
-
-Motor Izquierdo:
-ENABLE  10
-IN 1    11
-IN 2    12
-
-Motor Derecho:
-ENABLE  7
-IN 1    8
-IN 2    9
-
-*/
 #include "robot.h"
 #define FORWARD HIGH 
 #define BACKWARD LOW
@@ -44,8 +19,15 @@ IN 2    9
 // Configuración de pines dinámica según el modelo de placa y puente en H
 void robot::pinSetup() {
   #ifdef ARDUINO_TYPE_MKR
-    this->pinLeftEncoder = 0;  // Pin interrupción izquierda MKR
-    this->pinRightEncoder = 1; // Pin interrupción derecha MKR
+     #ifdef ENCODER_CUADRATURA
+      this->channelPinA_R = 0;
+      this->channelPinB_R = 1;
+      this->channelPinA_L = 5;
+      this->channelPinB_L = 4;
+    #else
+      this->pinLeftEncoder = 0;  // Pin interrupción izquierda MKR
+      this->pinRightEncoder = 1 ; // Pin interrupción derecha MKR
+    #endif
 
     #ifdef H_BRIDGE_BLACK
       // Configuración para el Puente en H Negro (L298N o similar)
@@ -193,14 +175,22 @@ void robot::fullStopLeftWheel()
     digitalWrite(this->pinMotorLeft[2], HIGH);
     analogWrite(this->pinMotorLeft[0], 0);
 }
-
 /**
  * Retorna el número de pin asignado al encoder de la rueda izquierda.
  * Se utiliza en setup() para configurar la interrupción (attachInterrupt).
  */
 int robot::getPinLeftEncoder()
 {
+  #ifdef ENCODER_CUADRATURA
+    return this->channelPinA_L;
+  #else    
     return this->pinLeftEncoder; // Retorna el pin configurado en pinSetup()
+  #endif
+}
+
+int robot::getPinLeftEncoderB()
+{
+    return this->channelPinB_L; // Retorna el pin configurado en pinSetup()
 }
 
 /**
@@ -209,7 +199,17 @@ int robot::getPinLeftEncoder()
  */
 int robot::getPinRightEncoder()
 {
+  #ifdef ENCODER_CUADRATURA
+    return this->channelPinA_R;
+  #else
     return this->pinRightEncoder; // Retorna el pin configurado en pinSetup()
+  #endif
+}
+
+
+int robot::getPinRightEncoderB()
+{
+    return this->channelPinB_R; // Retorna el pin configurado en pinSetup()
 }
 
 double robot::getRobotWheelDiameter()

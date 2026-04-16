@@ -95,6 +95,16 @@ short bytesToShort(unsigned char *b) {
     return(x.i);
 }
 
+#ifdef ENCODER_CUADRATURA
+
+  extern volatile long countsL;
+  extern volatile long countsR;
+  extern volatile byte lastStateL;
+  extern volatile byte lastStateR;
+  const int MAX_ENCODER_STEPS = 2800;
+
+
+#else
 // --- VARIABLES DE CONTROL DE ENCODER ---
 const int MAX_ENCODER_STEPS = 20; // Resolución física: pasos por vuelta del encoder
 
@@ -113,27 +123,10 @@ volatile unsigned long timeStopD= 0;
 volatile unsigned long timeStopI= 0;
 volatile unsigned long deltaTimeStopD;
 volatile unsigned long deltaTimeStopI;
-
-// --- CONTROL DE MOTORES Y PWM ---
-int PWM_Right=0; // Valor actual de PWM enviado al motor derecho
-int PWM_Left=0;  // Valor actual de PWM enviado al motor izquierdo
-
-// Setpoints de velocidad y banderas de dirección (back = marcha atrás)
-double SetpointD, SetpointI, SetpointAnterior=0;
-bool backD=false, backI=false;
-
-// Constantes de configuración de potencia y límites operativos
-#define MINPWM_R 100      // PWM mínimo para que el motor se mueva
-#define MINPWM_L 80      // PWM mínimo para que el motor se mueva
-#define MAXPWM 255      // PWM máximo (100% potencia)
-#define LIM_LINEAL 13.5 
-#define MINSETPOINT 5.5 // Velocidad mínima en rad/s para evitar la zona muerta
-
 // --- FILTRO DE DEBOUNCE (ANTI-REBOTES) ---
 // Evita lecturas erróneas por ruido eléctrico en las interrupciones del encoder
-unsigned long TIMEDEBOUNCE_L = 12; // Tiempo mínimo (ms) entre pulsos válidos
-unsigned long TIMEDEBOUNCE_R = 100; // Tiempo mínimo (ms) entre pulsos válidos
-
+// Umbral de debounce: 1000 microsegundos (1ms)
+const unsigned long DEBOUNCE_TIME =  30000;
 volatile unsigned long timeAfterDebounceRight= 0;
 volatile unsigned long timeBeforeDebounceRight=0;
 volatile unsigned long deltaDebounceRight= 0;
@@ -146,19 +139,29 @@ volatile unsigned long deltaDebounceLeft= 0;
 // Se usan para medir el periodo entre pulsos y derivar la velocidad angular
 volatile unsigned long startTimeLeft= 0;
 volatile unsigned long timeAfterLeft= 0;
-volatile unsigned deltaTimeLeft=1000000000000000; // Tiempo entre flancos en la rueda izquierda
+volatile unsigned long deltaTimeLeft; // Tiempo entre flancos en la rueda izquierda
 
 volatile unsigned long startTimeRight= 0;
 volatile unsigned long timeAfterRight= 0;
-volatile unsigned deltaTimeRight=1000000000000000; // Tiempo entre flancos en la rueda derecha
+volatile unsigned long deltaTimeRight; // Tiempo entre flancos en la rueda derecha
 
 volatile unsigned encoder_countRight= 0; // Contador de pulsos brutos (derecha)
-volatile unsigned encodercountLeftAnt=0;
 volatile unsigned encoder_countLeft= 0;  // Contador de pulsos brutos (izquierda)
-volatile unsigned encodercountRightAnt=0;
 
 
-//const int PIN_LEFT = 3 ;// For Arwen and Arduino Nano Every
-//const int PIN_LEFT = 2; // For Gandalf and Boromir and Arduino Nano 33IoT
-//const int PIN_RIGHT = 5 ;//For Arwen and Arduino Nano Every
-//const int PIN_RIGHT = 3 ;<//For For Gandalf and Boromir and Arduino Nano 33IoT
+#endif
+volatile unsigned encodercountRightAnt= 0; // Contador de pulsos brutos (derecha)
+volatile unsigned encodercountLeftAnt= 0;  // Contador de pulsos brutos (izquierda)
+
+
+// --- CONTROL DE MOTORES Y PWM ---
+int PWM_Right=0; // Valor actual de PWM enviado al motor derecho
+int PWM_Left=0;  // Valor actual de PWM enviado al motor izquierdo
+
+// Setpoints de velocidad y banderas de dirección (back = marcha atrás)
+double SetpointD, SetpointI, SetpointAnterior=0;
+bool backD=false, backI=false;
+
+// Constantes de configuración de potencia y límites operativos
+#define LIM_LINEAL 13.5 
+#define MINSETPOINT 5.5 // Velocidad mínima en rad/s para evitar la zona muerta

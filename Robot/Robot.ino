@@ -30,7 +30,7 @@
 
 // Configuración de macros para depuración por el Monitor Serie
 #define DEBUG_ENABLED  
-
+#define ENCODER_CUADRATURA
 
 #ifdef DEBUG_ENABLED
 #define DEBUG_PRINT(...)   Serial.print(__VA_ARGS__)
@@ -46,6 +46,7 @@ char ssid[] = SECRET_SSID;
 char pass[] = SECRET_PASS;    
 int status = WL_IDLE_STATUS;     
 #endif
+
 using namespace std;
 unsigned char packetBuffer[256]; // Buffer para almacenar paquetes recibidos por Serial
 
@@ -54,7 +55,12 @@ unsigned char packetBuffer[256]; // Buffer para almacenar paquetes recibidos por
 MeanFilter<double> meanFilterRight(10);
 MeanFilter<double> meanFilterLeft(10);
 const double MAX_OPTIMAL_VEL=20; // Límite de seguridad en rad/s
-
+#ifdef ENCODER_CUADRATURA
+  volatile long countsL = 0;
+  volatile long countsR = 0;
+  volatile byte lastStateL = 0;
+  volatile byte lastStateR = 0;
+#endif
 // --- VARIABLES DE OPERACIÓN Y COMUNICACIÓN ---
 struct appdata operation_send;    // Estructura para enviar datos a la Raspberry Pi
 struct appdata *server_operation; // Puntero para interpretar los datos recibidos como estructura appdata
@@ -98,7 +104,7 @@ int led = 13;          // LED integrado para señalización visual de estado
 unsigned long previous_timer;
 unsigned long timer = 10000;
 unsigned long currentTime, timeAfter;
-unsigned long lastMillis=0;
+unsigned long lastMillis=0,lastTime=0;
 
 
 // --- VARIABLES COMUNES DE CONTROL Y ESTADO ---
@@ -196,38 +202,24 @@ void setup() {
     // Configura los pines de control de los motores (IN1, IN2, ENA, etc.) como salidas
     robot.motorSetup();
      
-    // Configura los pines de los encoders como entrada con resistencia de pull-up interna
-    // El pull-up asegura que el pin no quede "flotando" y evita lecturas erróneas de ruido
-    pinMode(robot.getPinRightEncoder(), INPUT_PULLUP);
-    pinMode(robot.getPinLeftEncoder(), INPUT_PULLUP);
-    
-    // Vincula los pines de los encoders a funciones de interrupción (ISR)
-    // Se activan en el flanco de subida (RISING), permitiendo contar pulsos en tiempo real sin bloquear el loop
-    attachInterrupt(digitalPinToInterrupt(robot.getPinLeftEncoder()), isrLeft, RISING);
-    attachInterrupt(digitalPinToInterrupt(robot.getPinRightEncoder()), isrRight, RISING);
-    
-    // Inicializa la Unidad de Medición Inercial (IMU) interna para leer aceleración y rotación
-    // Si la IMU no responde, el programa se detiene por seguridad para evitar errores de navegación
-    /*if (!IMU.begin()) {
-      DEBUG_PRINTLN("Failed to initialize IMU!");
-      while (1); // Bucle infinito de seguridad
-    }*/
+   // Configuración de interrupciones para encoders (necesario para calcular w real)
+  #ifdef ENCODER_CUADRATURA
+    pinMode(robot.getPinLeftEncoder(), INPUT_PULLUP); // Canal A Izq
+    pinMode(robot.getPinLeftEncoderB() , INPUT_PULLUP); // Canal B Izq
+    pinMode(robot.getPinRightEncoder() , INPUT_PULLUP); // Canal A Der
+    pinMode(robot.getPinRightEncoderB() , INPUT_PULLUP); // Canal B Der
+  
+    // Interrumpimos en AMBOS canales para no perder ni un solo paso
+    attachInterrupt(digitalPinToInterrupt(robot.getPinLeftEncoder()), isrL, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(robot.getPinLeftEncoderB()), isrL, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(robot.getPinRightEncoder()), isrR, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(robot.getPinRightEncoderB()), isrR, CHANGE);
 
-    // Asegura que el robot comience totalmente estático frenando ambos motores eléctricamente
-    robot.fullStop();
+  #else
   
-    // Configuración del controlador de la rueda derecha:
-    // setControlerParam: Ajusta las constantes PID (Kp=15, Ki=1, Kd=0.00)
-    // setFeedForwardParam: Ajusta la compensación directa (Pendiente=14, Offset=-24.4)
-    wheelControlerRight.setControlerParam(15.0, 1.0, 0.00);
-    wheelControlerRight.setFeedForwardParam(130.3,-90.8);
-  
-    // Configuración del controlador de la rueda izquierda:
-    // Los parámetros varían ligeramente para compensar diferencias mecánicas entre motores
-    // ARWEN A= 24.1, B=-155
-    wheelControlerLeft.setControlerParam(15.0, 1.0, 0.00);
-    wheelControlerLeft.setFeedForwardParam(123,-100);
-    // Inicializamos los tiempos para que la resta no dé valores extraños
+    attachInterrupt(digitalPinToInterrupt(robot.getPinLeftEncoder()), isrL, FALLING);
+    attachInterrupt(digitalPinToInterrupt(robot.getPinRightEncoder()), isrR, FALLING);
+      // Inicializamos los tiempos para que la resta no dé valores extraños
     noInterrupts();
     timeAfterLeft = micros();
     timeAfterRight = micros();
@@ -235,12 +227,26 @@ void setup() {
     deltaTimeRight = 0;
     interrupts();
   
-  // Opcional: Si quieres que el filtro empiece "limpio"
-  for(int i=0; i<10; i++) {
-    meanFilterLeft.AddValue(0.0);
-    meanFilterRight.AddValue(0.0);
+
+  #endif
+
+  wheelControlerLeft.setFeedForwardParam(22.81,-69.4);
+  wheelControlerRight.setFeedForwardParam(25.62,-80.0);
+  // Paso 2: Solo proporcional (Kp). Ki y Kd a CERO.
+  // Un Kp de 2.0 o 5.0 es un buen inicio para motores de bajo coste.
+  wheelControlerLeft.setControlerParam(30,5.0,5.0);
+  wheelControlerRight.setControlerParam(50.0,10.0,10.0);
+  
+    // Opcional: Si quieres que el filtro empiece "limpio"
+    for(int i=0; i<10; i++) {
+      meanFilterLeft.AddValue(0.0);
+      meanFilterRight.AddValue(0.0);
   }
 
+    // Asegura que el robot comience totalmente estático frenando ambos motores eléctricamente
+    robot.fullStop();
+  
+ 
     // Inicializa la comunicación Serie 1 (pines físicos) con la Raspberry Pi a 9600 baudios
     Serial1.begin(9600);
     while(!Serial1){
@@ -327,7 +333,31 @@ void loop() {
      // 4. BUCLE DE LECTURA DE ENCODERS(Ejecutado cada SAMPLINGTIME, ej: 10ms)
     
   if ((currentTime - timeAfter)>= 10) {
-    // 1. Obtener el deltaTime de la ISR (usando sección crítica para evitar que cambie a mitad de lectura)
+    // 4. BUCLE DE LECTURA DE ENCODERS(Ejecutado cada SAMPLINGTIME, ej: 10ms)
+   // Ejecutamos el bucle de control cada 10ms (100Hz) como en tu Robot.ino original
+  if (millis() - lastMillis >= 10) {
+    #ifdef ENCODER_CUADRATURA
+      noInterrupts();
+      long encoderR=countsR;
+      long encoderL=countsL;
+      interrupts();
+      // 2. Calcular la velocidad instantánea
+      double instantW_L = 0;
+      double instantW_R =0;
+      // 1. Capturamos el tiempo actual
+      unsigned long ahora = micros();
+      unsigned long deltaTime=ahora-lastTime;
+      instantW_L = (M_PI /1400.0) *(encoderL-encodercountLeftAnt)* 1000000 / (deltaTime);
+      encodercountLeftAnt=encoderL;
+      instantW_R=(M_PI /1400.0) *(encoderR-encodercountRightAnt)* 1000000 / (deltaTime);
+      encodercountRightAnt=encoderR;
+      lastTime=ahora;
+        // IMPORTANTE: Limitar la velocidad máxima para evitar picos por ruido
+    if (instantW_R > MAX_OPTIMAL_VEL) instantW_R = MAX_OPTIMAL_VEL;
+    if (instantW_L > MAX_OPTIMAL_VEL) instantW_L = MAX_OPTIMAL_VEL;
+      
+    #else
+   // 1. Obtener el deltaTime de la ISR (usando sección crítica para evitar que cambie a mitad de lectura)
     noInterrupts();
     long dtL = deltaTimeLeft;
     long dtR = deltaTimeRight;
@@ -342,22 +372,22 @@ void loop() {
 
 // 2. Comprobamos si ha pasado mucho tiempo desde el último pulso (ej. 200ms = 200,000 us)
 // Si pasa más de ese tiempo sin interrupciones, la velocidad es 0.
-  if (ahora - timeAfterLeft > 200000) {
+  if (ahora - timeAfterLeft > 200000000000) {
     instantW_L = 0;
   } 
   else {
     // Solo calculamos si hay un tiempo válido
     if (dtL > 0) {
-       instantW_L = (M_PI /10.0) *(encoderL-encodercountLeftAnt)* 1000000 / (dtL );
+       instantW_L = (M_PI /10.0) *(encoderL-encodercountLeftAnt)* 1000000 / (deltaTimeLeft );
        encodercountLeftAnt=encoderL;
     }
   }
-  if (ahora - timeAfterRight > 200000) {
+  if (ahora - timeAfterRight > 2000000) {
     instantW_R = 0;
   } 
   else {
     if (dtR > 0) {
-      instantW_R=(M_PI /10.0) *(encoderR-encodercountRightAnt)* 1000000 / (dtR );
+      instantW_R=(M_PI /10.0) *(encoderR-encodercountRightAnt)* 1000000 / (deltaTimeRight );
       encodercountRightAnt=encoderR;
     }
   }
@@ -365,13 +395,15 @@ void loop() {
 // 3. Aplicar signo según la dirección (backI, backD)
   if (backI) instantW_L *= -1.0;
   if (backD) instantW_R *= -1.0;
-  // IMPORTANTE: Limitar la velocidad máxima para evitar picos por ruido
-    if (instantW_R > MAX_OPTIMAL_VEL) instantW_R = MAX_OPTIMAL_VEL;
-    if (instantW_L > MAX_OPTIMAL_VEL) instantW_L = MAX_OPTIMAL_VEL;
 
+ #endif
+ 
     // 3. PASAR POR EL FILTRO
     meanFilterLeft.AddValue(instantW_L);
     meanFilterRight.AddValue(instantW_R);
+
+    lastMillis = millis();
+  }
   // 4. USAR EL VALOR FILTRADO PARA EL CONTROL Y TELEMETRÍA
     double wLeft = meanFilterLeft.GetFiltered();
     double wRight = meanFilterRight.GetFiltered();
@@ -383,7 +415,7 @@ void loop() {
   
     double V_robot = (vR + vL) / 2.0;                    // Velocidad lineal (cm/s)
     double W_robot = (vR - vL) / robot.getRobotDiameter(); // Velocidad angular (rad/s)
-
+    
     
     // 5. ALGORITMO DE CONTROL PID
     if(control)
@@ -397,8 +429,8 @@ void loop() {
     pwm_pid_l=wheelControlerLeft.pid(wLeft);
     pwm_pid_r=wheelControlerRight.pid(wRight);
     
-    PWM_Left = constrain(wheelControlerLeft.feedForward()+wheelControlerLeft.pid(wLeft),MINPWM_L,MAXPWM);
-    PWM_Right = constrain(wheelControlerRight.feedForward()+wheelControlerRight.pid(wRight),MINPWM_R,MAXPWM);
+    PWM_Left = constrain(wheelControlerLeft.feedForward()+wheelControlerLeft.pid(wLeft),MINPWM,MAXPWM);
+    PWM_Right = constrain(wheelControlerRight.feedForward()+wheelControlerRight.pid(wRight),MINPWM,MAXPWM);
     // DEBUG
     static unsigned long ultimaImpresion = 0;
     if (millis() - ultimaImpresion > 1250) { // Imprime cada 250ms
@@ -444,20 +476,7 @@ void loop() {
     }   
    // 6. ACTUALIZACIÓN DE MOTORES (Escritura en Hardware)
     // Solo envía la instrucción al puente en H si el valor de PWM ha cambiado
-   /* if(auxPWMI != PWM_Left){
-      robot.moveLeftWheel(PWM_Left, wheelControlerLeft.getSetPoint(), backI);
-      //DEBUG_PRINT("PWM_Left: ");
-      //DEBUG_PRINT(PWM_Left);
-      auxPWMI = PWM_Left; // Actualiza el valor auxiliar para la siguiente comparación
-    }
-    if(auxPWMD != PWM_Right){
-      robot.moveRightWheel(PWM_Right, wheelControlerRight.getSetPoint(), backD);
-      //DEBUG_PRINT(" PWM_Right: ");
-      //DEBUG_PRINTLN(PWM_Right);
-      auxPWMD = PWM_Right;
-    }
-   }*/
-   
+ 
    // 7. TELEMETRÍA
     // Si la Raspberry Pi solicitó datos (sendDataSerial), envía el estado de los sensores cada 1s para no saturar
     if(sendDataSerial && (currentTime - timeAfter) >= TELEMETRYTIME)
@@ -660,42 +679,7 @@ void op_moveRobot() {
   wheelControlerRight.setSetPoint(setpointWRight);
   wheelControlerLeft.setBack(backI);
   wheelControlerRight.setBack(backD);
-/*
-  // 4. ACTUALIZACIÓN DEL CONTROLADOR:
-  // Se informa a los objetos de control cuál es la nueva velocidad objetivo.
-  
-  // 5. CÁLCULO DE POTENCIA INICIAL (FeedForward):
-  // El FeedForward estima el PWM necesario basándose en la velocidad deseada 
-  // antes de que el PID empiece a corregir errores.
-  wheelControlerLeft.setSetPoint(setpointWLeft);
-  wheelControlerRight.setSetPoint(setpointWRight);
-  PWM_Left = constrain(wheelControlerLeft.feedForward()+wheelControlerLeft.pid(wLeft),MINPWM,MAXPWM);
-  PWM_Right = constrain(wheelControlerRight.feedForward()+wheelControlerRight.pid(wRight),MINPWM,MAXPWM);
-  
-  DEBUG_PRINT("PWM_Left:");
-  DEBUG_PRINT(PWM_Left);
-  DEBUG_PRINT("Left FWR:");
-  DEBUG_PRINT(backI);
 
-  DEBUG_PRINT(" PWM_Right:");
-  DEBUG_PRINT(PWM_Right);
-  DEBUG_PRINT("Right fwr:");
-  DEBUG_PRINTLN(backD);
-  
-
-  // 6. EJECUCIÓN FÍSICA:
-  // Se envían las señales a los puentes en H a través de la clase robot.
-  robot.moveLeftWheel(PWM_Left, setpointWLeft, backI);
-  robot.moveRightWheel(PWM_Right, setpointWRight, backD);
-
-  // 7. ESTABILIZACIÓN DE SENSORES:
-  // Se fuerzan 10 lecturas iniciales en el filtro de media móvil para que 
-  // el sistema de control de velocidad no herede datos de cuando el robot estaba en otro estado.
-  for(int i=0; i<10; i++)
-  {
-    meanFilterRight.AddValue(deltaTimeRight);
-    meanFilterLeft.AddValue(deltaTimeLeft);
-  }*/
 }
 
 
@@ -1011,18 +995,55 @@ void op_done()
   Serial1.flush();
 }
 
+#ifdef ENCODER_CUADRATURA
 
+
+void isrL() {
+  // 1. Leer ambos pines y formar un número de 2 bits (binario)
+  byte currentState = (digitalRead(5) << 1) | digitalRead(4);
+  
+  // 2. Comparar con el estado anterior para saber dirección
+  // Esta lógica es un "resumen" de la tabla de verdad de cuadratura
+  if (lastStateL != currentState) {
+    if ((lastStateL == 0 && currentState == 1) || 
+        (lastStateL == 1 && currentState == 3) || 
+        (lastStateL == 3 && currentState == 2) || 
+        (lastStateL == 2 && currentState == 0)) {
+      countsL++;
+    } else {
+      countsL--;
+    }
+    lastStateL = currentState;  
+  }
+}
+
+void isrR() {
+  byte currentState = (digitalRead(0) << 1) | digitalRead(1);
+  if (lastStateR != currentState) {
+    if ((lastStateR == 0 && currentState == 1) || 
+        (lastStateR == 1 && currentState == 3) || 
+        (lastStateR == 3 && currentState == 2) || 
+        (lastStateR == 2 && currentState == 0)) {
+      countsR++;
+    } else {
+      countsR--;
+    }
+    lastStateR = currentState;
+  }
+}
+
+#else
 /**
  * ISR para la rueda derecha.
  * Se activa en cada flanco de subida del sensor del encoder.
  */
-void isrRight() {
+void isrR() {
   // 1. GESTIÓN DE REBOTES (Debouncing)
  unsigned long ahora=micros(); // Captura el tiempo actual del pulso
  
   // Solo procesamos el pulso si ha pasado suficiente tiempo (TIMEDEBOUNCE)
   // Esto filtra picos de voltaje o vibraciones mecánicas que darían velocidades falsas
-  if(ahora-timeAfterRight > TIMEDEBOUNCE_R) {
+  if(ahora-timeAfterRight >  DEBOUNCE_TIME) {
     
     encoder_countRight++;      // Incrementa el contador total de pasos
     deltaTimeRight = ahora - timeAfterRight;
@@ -1034,13 +1055,13 @@ void isrRight() {
  * ISR para la rueda izquierda.
  * Realiza la misma lógica de filtrado y conteo para el motor izquierdo.
  */
-void isrLeft() {
+void isrL() {
   // 1. GESTIÓN DE REBOTES (Debouncing)
   unsigned long ahora=micros(); // Captura el tiempo actual del pulso
 
   // Solo procesamos el pulso si ha pasado suficiente tiempo (TIMEDEBOUNCE)
   // Esto filtra picos de voltaje o vibraciones mecánicas que darían velocidades falsas
-  if(ahora-timeAfterLeft > TIMEDEBOUNCE_L) {
+ if(ahora-timeAfterLeft >  DEBOUNCE_TIME) {
     
     encoder_countLeft++;      // Incrementa el contador total de pasos
     deltaTimeLeft = ahora - timeAfterLeft;
@@ -1048,6 +1069,8 @@ void isrLeft() {
     }
 
 }
+
+#endif
 /* TODO: Revisar esta version mejorada no bloqueante  
  *  void serialEvent() {
   static int index = 0; // Mantiene la posición del buffer entre llamadas a la función

@@ -10,139 +10,78 @@
 const int channelPinA_R = 0;
 const int channelPinB_R = 1;
 
-const int channelPinA_L = 4;
-const int channelPinB_L = 5;
+const int channelPinA_L = 5;
+const int channelPinB_L = 4;
 
-// Umbral de debounce: 1000 microsegundos (1ms)
-const unsigned long DEBOUNCETIME = 30000; 
-volatile unsigned long ultimoMicrosIzquierdo = 0;
-volatile unsigned long ultimoMicrosDerecho = 0;
-volatile unsigned long deltaTimeIzquierdo = 0;
-volatile unsigned long deltaTimeDerecho = 0;
+// ==================================================================================
+// PROYECTO: Robotarium - Control de Encoders de Alta Resolución
+// OBJETIVO: Lectura mediante máquina de estados (Modo 4x)
+// ==================================================================================
 
-const int maxSteps = 7;
-volatile int ISRCounter_R = 0;
-volatile int ISRCounter_L = 0;
+volatile long countsL = 0;
+volatile long countsR = 0;
 
-int counter_R = 0;
-int counter_L = 0;
+// Variables para almacenar el estado anterior
+volatile byte lastStateL = 0;
+volatile byte lastStateR = 0;
 
-bool IsCW_R = true;
-bool IsCW_L = true;
-
-void setup()
-{
-  pinMode(channelPinA_R, INPUT_PULLUP);
-  pinMode(channelPinB_R, INPUT_PULLUP);
-  pinMode(channelPinA_L, INPUT_PULLUP);
-  pinMode(channelPinB_L, INPUT_PULLUP);
+void isrL() {
+  // 1. Leer ambos pines y formar un número de 2 bits (binario)
+  byte currentState = (digitalRead(5) << 1) | digitalRead(4);
   
-  Serial.begin(9600);
-  
-  attachInterrupt(digitalPinToInterrupt(channelPinA_R), doEncodeA_R, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(channelPinB_R), doEncodeB_R, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(channelPinA_L), doEncodeA_L, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(channelPinB_L), doEncodeB_L, CHANGE);
-
-}
-
-void loop()
-{
-  static unsigned long ultimaImpresion = 0;
-  if (millis() - ultimaImpresion > 250) { // Imprime cada 250ms
-    Serial.print("IZQ: "); Serial.print(ISRCounter_L);
-    Serial.print(" | Δt IZQ: "); Serial.print(deltaTimeIzquierdo);
-    Serial.print(" us | DER: "); Serial.print(ISRCounter_R);
-    Serial.print(" | Δt DER: "); Serial.println(deltaTimeDerecho);
-    ultimaImpresion = millis();
+  // 2. Comparar con el estado anterior para saber dirección
+  // Esta lógica es un "resumen" de la tabla de verdad de cuadratura
+  if (lastStateL != currentState) {
+    if ((lastStateL == 0 && currentState == 1) || 
+        (lastStateL == 1 && currentState == 3) || 
+        (lastStateL == 3 && currentState == 2) || 
+        (lastStateL == 2 && currentState == 0)) {
+      countsL++;
+    } else {
+      countsL--;
+    }
+    lastStateL = currentState;  
   }
 }
 
-// Rueda izquierda
-
-void doEncodeA_L()
-{
-  unsigned long ahora = micros();
-  if (ahora -ultimoMicrosIzquierdo> DEBOUNCETIME)
-  {
-    if (digitalRead(channelPinA_L) == digitalRead(channelPinB_L))
-    {
-      IsCW_L = true;
-      ISRCounter_L++;
+void isrR() {
+  byte currentState = (digitalRead(0) << 1) | digitalRead(1);
+  if (lastStateR != currentState) {
+    if ((lastStateR == 0 && currentState == 1) || 
+        (lastStateR == 1 && currentState == 3) || 
+        (lastStateR == 3 && currentState == 2) || 
+        (lastStateR == 2 && currentState == 0)) {
+      countsR++;
+    } else {
+      countsR--;
     }
-    else
-    {
-      IsCW_L = false;
-      ISRCounter_L--;
-    }
-    deltaTimeIzquierdo = ahora - ultimoMicrosIzquierdo;
-    ultimoMicrosIzquierdo = ahora;  
-    }
-}
-
-void doEncodeB_L()
-{
-  unsigned long ahora = micros();
-  if (ahora -ultimoMicrosIzquierdo> DEBOUNCETIME)
- {
-    if (digitalRead(channelPinA_L) != digitalRead(channelPinB_L))
-    {
-      IsCW_L = true;
-      ISRCounter_L++;
-    }
-    else
-    {
-      IsCW_L = false;
-      ISRCounter_L--;
-    }
-    deltaTimeIzquierdo = ahora - ultimoMicrosIzquierdo;
-    ultimoMicrosIzquierdo = ahora;  ;
+    lastStateR = currentState;
   }
 }
+void setup() {
+  Serial.begin(115200);
 
-// Rueda derecha
-void doEncodeA_R()
-{
-   unsigned long ahora = micros();
-  if (ahora -ultimoMicrosDerecho> DEBOUNCETIME)
-  {
-    if (digitalRead(channelPinA_R) == digitalRead(channelPinB_R))
-    {
-      IsCW_R = true;
-      if (ISRCounter_R + 1 <= maxSteps) ISRCounter_R++;
-    }
-    else
-    {
-      IsCW_R = false;
-      if (ISRCounter_R - 1 > 0) ISRCounter_R--;
-    }
-    deltaTimeDerecho= ahora - ultimoMicrosDerecho;
-    ultimoMicrosDerecho = ahora;  
+  pinMode(channelPinA_L, INPUT_PULLUP); // Canal A Izq
+  pinMode(channelPinB_L , INPUT_PULLUP); // Canal B Izq
+  pinMode(channelPinA_R , INPUT_PULLUP); // Canal A Der
+  pinMode(channelPinB_R , INPUT_PULLUP); // Canal B Der
 
-  }
+  // Interrumpimos en AMBOS canales para no perder ni un solo paso
+  attachInterrupt(digitalPinToInterrupt(5), isrL, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(4), isrL, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(0), isrR, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(1), isrR, CHANGE);
 }
 
-void doEncodeB_R()
-{
-  unsigned long ahora = micros();
-  if (ahora -ultimoMicrosDerecho > DEBOUNCETIME)
-  {
-    if (digitalRead(channelPinA_R) != digitalRead(channelPinB_R))
-    {
-      IsCW_R = true;
-      if (ISRCounter_R + 1 <= maxSteps) ISRCounter_R++;
-    }
-    else
-    {
-      IsCW_R = false;
-      if (ISRCounter_R - 1 > 0) ISRCounter_R--;
-    }
-      deltaTimeDerecho= ahora - ultimoMicrosDerecho;
-    ultimoMicrosDerecho = ahora;  
 
+void loop() {
+  static unsigned long t = 0;
+  if (millis() - t > 100) {
+    Serial.print("L: "); Serial.print(countsL);
+    Serial.print(" | R: "); Serial.println(countsR);
+    t = millis();
   }
 }
-
 #else
 // Definiciones basadas en tus archivos
 const int pinEncoderIzquierdo = 3; // Ajusta según tu robot.h
