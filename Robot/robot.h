@@ -19,16 +19,16 @@
 #define H_BRIDGE_RED
 
 // ARDUINO TYPE: UNCOMMENT ONLY ONE OPTION
-//#define ARDUINO_TYPE_MKR
-#define ARDUINO_TYPE_NANO
+#define ARDUINO_TYPE_MKR
+//#define ARDUINO_TYPE_NANO
 
 
 // ROBOT TYPE: UNCOMMENT ONLY ONE OPTION
-#define BIGBOT
-//#define SMALLBOT
+//#define BIGBOT
+#define SMALLBOT
 
 // ENCODER TYPE
-#define ENCODER_CUADRATURA
+//#define ENCODER_CUADRATURA
 
 
 #pragma once
@@ -53,6 +53,7 @@ class robot
         double getRobotWheelRadius();
         double getRobotDiameter();
         uint8_t getRobotID();
+        double getL();
 
         int getPinLeftEncoder();
         int getPinRightEncoder();
@@ -76,11 +77,12 @@ class robot
         int channelPinA_L;
         int channelPinB_L;
 
-
+        double L=10; //distancia entre ruedas, modelo mkr
+       
         double RobotWheelDiamter = 6.7;
         double RobotWheelRadius = 3.35;
         double RobotDiameter = 14.5;
-        uint8_t robotID=5;
+        uint8_t robotID=6;
 
         const int LEFT_WHEEL = 0;
         const int RIGHT_WHEEL = 1;

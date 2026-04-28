@@ -39,7 +39,7 @@ void robot::pinSetup() {
       // Configuración para el Puente en H Rojo
       this->pinENA = 7;  this->pinIN2 = 9;  this->pinIN1 = 8;
       //this->pinIN3 = 12; this->pinIN4 = 11; this->pinENB = 6;
-      this->pinIN3 = 5; this->pinIN4 = 4; this->pinENB = 3;
+      this->pinIN3 = 6; this->pinIN4 = 2; this->pinENB = 3;
     #endif
   #endif
   
@@ -69,8 +69,10 @@ void robot::pinSetup() {
 void robot::motorSetup() {
     pinMode(this->pinENA, OUTPUT); pinMode(this->pinIN1, OUTPUT); pinMode(this->pinIN2, OUTPUT);
     pinMode(this->pinENB, OUTPUT); pinMode(this->pinIN3, OUTPUT); pinMode(this->pinIN4, OUTPUT);
+    #ifndef ENCODER_CUADRATURA
     pinMode(this->pinLeftEncoder,INPUT_PULLUP);
     pinMode(this->pinRightEncoder,INPUT_PULLUP);
+    #endif
 }
 
 // Mueve una rueda hacia adelante aplicando PWM
@@ -132,6 +134,11 @@ double robot::getRobotWheelRadius()
     return this->RobotWheelRadius; // Valor por defecto: 3.35 cm
 }
 
+
+double robot::getL()
+{
+  return this->L;//10
+}
 /**
  * Detiene ambos motores inmediatamente.
  * Configura los pines de control para frenado activo y pone el PWM a 0.

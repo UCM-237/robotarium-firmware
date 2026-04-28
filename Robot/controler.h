@@ -15,10 +15,10 @@
 
 #include <Arduino.h>
 
-#define MINPWM 55
+#define MINPWM 30
 #define MAXPWM 255
-#define VRMIN 4.85
-#define VLMIN 4.64 
+#define VRMIN 3.4
+#define VLMIN 3.4 
 class controler
 {
     public:

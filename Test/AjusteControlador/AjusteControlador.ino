@@ -22,6 +22,8 @@
 // Configuración de macros para depuración por el Monitor Serie
 #define DEBUG_ENABLED  
 #define ENCODER_CUADRATURA
+#define ARDUINO_MKR
+#define SMALL_BOT
 
 #ifdef DEBUG_ENABLED
 #define DEBUG_PRINT(...)   Serial.print(__VA_ARGS__)
@@ -32,7 +34,7 @@
 #endif
 
 // --- CONFIGURACIÓN DEL TEST ---
-double VELOCIDAD_OBJETIVO = 0.01; // rad/s (ajusta según necesites)
+double VELOCIDAD_OBJETIVO = 0.0; // rad/s (ajusta según necesites)
 bool TEST_RUEDA_DERECHA =false;   // true para derecha, false para izquierda
 bool BACKWARDS= false; // true rueda hacia atras, false hacia adelante
 // ------------------------------
@@ -42,7 +44,7 @@ bool BACKWARDS= false; // true rueda hacia atras, false hacia adelante
 #define AJUSTEPID
 //------------------------------
 int pwm_output=0;
-double w_objetivo=6.5;
+double w_objetivo=3.5;
 robot miRobot;
 controler PID_RuedaL, PID_RuedaR;
 
@@ -52,7 +54,7 @@ controler PID_RuedaL, PID_RuedaR;
 MeanFilter<double> meanFilterRight(10);
 MeanFilter<double> meanFilterLeft(10);
 
-const double MAX_OPTIMAL_VEL=50; // Límite de seguridad en rad/s
+const double MAX_OPTIMAL_VEL=20; // Límite de seguridad en rad/s
 static unsigned long lastMillis = 0, tpwmant=0,lastTime=0;
 static unsigned long ultimaImpresion = 0, cambio_consigna=0;
 void setup() {
@@ -64,12 +66,12 @@ void setup() {
   PID_RuedaL.setSetPoint(VELOCIDAD_OBJETIVO);
   PID_RuedaR.setSetPoint(VELOCIDAD_OBJETIVO);
 
-  PID_RuedaL.setFeedForwardParam(22.81,-69.4);
-  PID_RuedaR.setFeedForwardParam(25.62,-80.0);
+  PID_RuedaL.setFeedForwardParam(9.12,18.90);
+  PID_RuedaR.setFeedForwardParam(8.5,19.0);
   // Paso 2: Solo proporcional (Kp). Ki y Kd a CERO.
   // Un Kp de 2.0 o 5.0 es un buen inicio para motores de bajo coste.
-  PID_RuedaL.setControlerParam(30,5.0,5.0);
-  PID_RuedaR.setControlerParam(50.0,10.0,10.0);
+  PID_RuedaL.setControlerParam(5.0,2.5,0.0);
+  PID_RuedaR.setControlerParam(4.0,2.5,0.0);
   // Configuración de interrupciones para encoders (necesario para calcular w real)
   #ifdef ENCODER_CUADRATURA
     pinMode(miRobot.getPinLeftEncoder(), INPUT_PULLUP); // Canal A Izq
@@ -132,7 +134,7 @@ void loop() {
         // IMPORTANTE: Limitar la velocidad máxima para evitar picos por ruido
     if (instantW_R > MAX_OPTIMAL_VEL) instantW_R = MAX_OPTIMAL_VEL;
     if (instantW_L > MAX_OPTIMAL_VEL) instantW_L = MAX_OPTIMAL_VEL;
-      
+        
     #else
    // 1. Obtener el deltaTime de la ISR (usando sección crítica para evitar que cambie a mitad de lectura)
     noInterrupts();
@@ -293,10 +295,10 @@ tpwmant=millis();
             pwm_output=constrain(pwm_output,MINPWM,MAXPWM);
             miRobot.moveRightWheel(pwm_output, wRight, BACKWARDS);
             if (millis() - ultimaImpresion > 50) {
-             /* Serial.print("pwm: ");
+              Serial.print("pwm: ");
               Serial.print(pwm_output);
               Serial.print("pwm_pid: ");
-              Serial.print(pwm_pid);*/
+              Serial.print(pwm_pid);
               Serial.print(", w_objetivo: ");
               Serial.print(w_objetivo);
               Serial.print(", w_real: ");
@@ -314,6 +316,7 @@ tpwmant=millis();
             pwm_output= PID_RuedaL.feedForward(); 
             //Serial.print("pwm_FF: ");
             //Serial.print(pwm_output);
+            wLeft=meanFilterLeft.GetFiltered();
             pwm_pid=PID_RuedaL.pid(wLeft);
             pwm_output+=pwm_pid;
             pwm_output=constrain(pwm_output,MINPWM,MAXPWM);
@@ -322,17 +325,17 @@ tpwmant=millis();
             Serial.print(pwm_output);*/
             if (millis() - ultimaImpresion > 250) {
             
-            /*Serial.print("pwm: ");
+            Serial.print("pwm: ");
             Serial.print(pwm_output);
             Serial.print(" pwm_pid: ");
-            Serial.print(pwm_pid);*/
+            Serial.print(pwm_pid);
             Serial.print("w_objetivo: ");
             Serial.print(w_objetivo);
             Serial.print(", w_real: ");
             Serial.println(wLeft);
              ultimaImpresion=millis();
              } 
-            if(millis()-cambio_consigna>10000){
+            if(millis()-cambio_consigna>20000){
               w_objetivo+=1.0;
               cambio_consigna=millis();
             }

@@ -144,12 +144,12 @@ volatile unsigned long deltaTimeLeft; // Tiempo entre flancos en la rueda izquie
 volatile unsigned long startTimeRight= 0;
 volatile unsigned long timeAfterRight= 0;
 volatile unsigned long deltaTimeRight; // Tiempo entre flancos en la rueda derecha
-
+#endif
 volatile unsigned encoder_countRight= 0; // Contador de pulsos brutos (derecha)
 volatile unsigned encoder_countLeft= 0;  // Contador de pulsos brutos (izquierda)
 
 
-#endif
+
 volatile unsigned encodercountRightAnt= 0; // Contador de pulsos brutos (derecha)
 volatile unsigned encodercountLeftAnt= 0;  // Contador de pulsos brutos (izquierda)
 

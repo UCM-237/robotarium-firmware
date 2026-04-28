@@ -64,15 +64,17 @@ void robot::pinSetup() {
 
   // Asignación de arrays para facilitar el manejo de motores [ENABLE, IN1, IN2]
   this->pinMotorRight[0] = pinENA; this->pinMotorRight[1] = pinIN1; this->pinMotorRight[2] = pinIN2;
-  this->pinMotorLeft[0] = pinENB;  this->pinMotorLeft[1] = pinIN4;  this->pinMotorLeft[2] = pinIN3;
+  this->pinMotorLeft[0] = pinENB;  this->pinMotorLeft[1] = pinIN3;  this->pinMotorLeft[2] = pinIN4;
 }
 
 // Configura todos los pines de control como salida
 void robot::motorSetup() {
     pinMode(this->pinENA, OUTPUT); pinMode(this->pinIN1, OUTPUT); pinMode(this->pinIN2, OUTPUT);
     pinMode(this->pinENB, OUTPUT); pinMode(this->pinIN3, OUTPUT); pinMode(this->pinIN4, OUTPUT);
+    #ifndef ENCODER_CUADRATURA
     pinMode(this->pinLeftEncoder,INPUT_PULLUP);
     pinMode(this->pinRightEncoder,INPUT_PULLUP);
+    #endif
 }
 
 // Mueve una rueda hacia adelante aplicando PWM
@@ -132,6 +134,11 @@ double robot::getRobotWheelRadius()
     return this->RobotWheelRadius; // Valor por defecto: 3.35 cm
 }
 
+
+double robot::getL()
+{
+  return this->L;//10
+}
 /**
  * Detiene ambos motores inmediatamente.
  * Configura los pines de control para frenado activo y pone el PWM a 0.
@@ -212,4 +219,9 @@ int robot::getPinRightEncoder()
 int robot::getPinRightEncoderB()
 {
     return this->channelPinB_R; // Retorna el pin configurado en pinSetup()
+}
+
+double robot::getRobotWheelDiameter()
+{
+    return this->RobotWheelDiamter;
 }

@@ -37,7 +37,7 @@ int controler::pid(double w) {
     double aux = abs(this->error);
 
     // Zona muerta: Si el error es menor a 0.3 rad/s, no aplicamos corrección para evitar oscilaciones
-    if(aux >= 0.3) {
+    if(aux >= 0.1) {
         // Acumulamos el error para la parte Integral
         this->cumError += this->error * this->elapsedTime;
         
