@@ -78,11 +78,11 @@ The robot maintains precise velocity ($rad/s$) through:
 
 Install via Library Manager: WiFiNINA, ArduinoMqttClient, ArduinoJson, SimpleKalmanFilter, MeanFilterLib.
 
-3. Encoder Check: Run TestEncoder.ino and rotate wheels manually. Ensure countsL/R increase when moving forward.
+2. Encoder Check: Run TestEncoder.ino and rotate wheels manually. Ensure countsL/R increase when moving forward.
 
-4. Tuning: Use AjusteControlador.ino to find your motor's $A$ and $B$ FeedForward constants.
+3. Tuning: Use AjusteControlador.ino to find your motor's $A$ and $B$ FeedForward constants.
 
-5. Production: Flash the code in the /Robot folder for full swarm integration.
+4. Production: Flash the code in the /Robot folder for full swarm integration.
 
 ----------------------------------------------------------------------------------------------------------
 UCM Robotarium Project | Faculty of Computer Science | Complutense University of Madrid.
