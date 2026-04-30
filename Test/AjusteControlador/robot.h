@@ -45,6 +45,7 @@ class robot
         int getPinRightEncoder();
         int getPinLeftEncoderB();
         int getPinRightEncoderB();
+        double getL();
         
        
     private:
@@ -68,6 +69,7 @@ class robot
         double RobotWheelDiamter = 6.7;
         double RobotWheelRadius = 3.35;
         double RobotDiameter = 14.5;
+        double L =10.;
         uint8_t robotID=7;
         const int LEFT_WHEEL = 0;
         const int RIGHT_WHEEL = 1;

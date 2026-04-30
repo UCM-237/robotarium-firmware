@@ -35,13 +35,13 @@
 
 // --- CONFIGURACIÓN DEL TEST ---
 double VELOCIDAD_OBJETIVO = 0.0; // rad/s (ajusta según necesites)
-bool TEST_RUEDA_DERECHA =false;   // true para derecha, false para izquierda
+bool TEST_RUEDA_DERECHA =true;   // true para derecha, false para izquierda
 bool BACKWARDS= false; // true rueda hacia atras, false hacia adelante
 // ------------------------------
 // Uncomment only one
-//#define  AJUSTEFF
+#define  AJUSTEFF
 //#define TESTFF
-#define AJUSTEPID
+//#define AJUSTEPID
 //------------------------------
 int pwm_output=0;
 double w_objetivo=3.5;
@@ -66,12 +66,12 @@ void setup() {
   PID_RuedaL.setSetPoint(VELOCIDAD_OBJETIVO);
   PID_RuedaR.setSetPoint(VELOCIDAD_OBJETIVO);
 
-  PID_RuedaL.setFeedForwardParam(9.12,18.90);
-  PID_RuedaR.setFeedForwardParam(8.5,19.0);
+  PID_RuedaL.setFeedForwardParam(4.65,-31.65);
+  PID_RuedaR.setFeedForwardParam(5.98,-4.7);
   // Paso 2: Solo proporcional (Kp). Ki y Kd a CERO.
   // Un Kp de 2.0 o 5.0 es un buen inicio para motores de bajo coste.
-  PID_RuedaL.setControlerParam(5.0,2.5,0.0);
-  PID_RuedaR.setControlerParam(4.0,2.5,0.0);
+  PID_RuedaL.setControlerParam(6.2,0.0,0.0);
+  PID_RuedaR.setControlerParam(2.0,0.5,0.0);
   // Configuración de interrupciones para encoders (necesario para calcular w real)
   #ifdef ENCODER_CUADRATURA
     pinMode(miRobot.getPinLeftEncoder(), INPUT_PULLUP); // Canal A Izq
