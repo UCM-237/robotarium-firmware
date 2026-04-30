@@ -13,26 +13,7 @@
  
 #pragma once
 #include <Arduino.h>
-
-// H-BRIDGE: UNCOMMENT ONLY ONE OPTION
-//#define H_BRIDGE_BLACK
-#define H_BRIDGE_RED
-
-// ARDUINO TYPE: UNCOMMENT ONLY ONE OPTION
-#define ARDUINO_TYPE_MKR
-//#define ARDUINO_TYPE_NANO
-
-
-// ROBOT TYPE: UNCOMMENT ONLY ONE OPTION
-//#define BIGBOT
-#define SMALLBOT
-
-// ENCODER TYPE
-//#define ENCODER_CUADRATURA
-
-
-#pragma once
-#include <Arduino.h>
+#include "config.h"
 
 class robot
 {
@@ -52,8 +33,8 @@ class robot
         double getRobotWheelDiameter();
         double getRobotWheelRadius();
         double getRobotDiameter();
-        uint8_t getRobotID();
         double getL();
+        uint8_t getRobotID();
 
         int getPinLeftEncoder();
         int getPinRightEncoder();
@@ -77,12 +58,11 @@ class robot
         int channelPinA_L;
         int channelPinB_L;
 
-        double L=10; //distancia entre ruedas, modelo mkr
-       
-        double RobotWheelDiamter = 6.7;
-        double RobotWheelRadius = 3.35;
-        double RobotDiameter = 14.5;
-        uint8_t robotID=6;
+        
+        double RobotWheelDiamter = ROBOT_WHEEL_DIAMETER ;
+        double RobotWheelRadius = ROBOT_WHEEL_DIAMETER/2.0;
+        double RobotDiameter = ROBOT_DIAMETER ;
+        uint8_t robotID=ROBOT_ID;
 
         const int LEFT_WHEEL = 0;
         const int RIGHT_WHEEL = 1;
