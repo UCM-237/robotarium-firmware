@@ -45,7 +45,7 @@ void isrL() {
 }
 
 void isrR() {
-  byte currentState = (digitalRead(0) << 1) | digitalRead(1);
+  byte currentState = (digitalRead(channelPinA_R) << 1) | digitalRead(channelPinB_R);
   if (lastStateR != currentState) {
     if ((lastStateR == 0 && currentState == 1) || 
         (lastStateR == 1 && currentState == 3) || 
@@ -69,8 +69,8 @@ void setup() {
   // Interrumpimos en AMBOS canales para no perder ni un solo paso
   attachInterrupt(digitalPinToInterrupt(5), isrL, CHANGE);
   attachInterrupt(digitalPinToInterrupt(4), isrL, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(0), isrR, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(1), isrR, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(channelPinA_R), isrR, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(channelPinB_R), isrR, CHANGE);
 }
 
 

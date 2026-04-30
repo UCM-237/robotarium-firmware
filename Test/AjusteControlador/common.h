@@ -153,8 +153,9 @@ volatile unsigned encoder_countLeft= 0;  // Contador de pulsos brutos (izquierda
 
 
 #endif
-volatile unsigned encodercountRightAnt= 0; // Contador de pulsos brutos (derecha)
-volatile unsigned encodercountLeftAnt= 0;  // Contador de pulsos brutos (izquierda)
+
+volatile long encodercountRightAnt= 0; // Contador de pulsos brutos (derecha)
+volatile long  encodercountLeftAnt= 0;  // Contador de pulsos brutos (izquierda)
 
 // --- CONTROL DE MOTORES Y PWM ---
 int PWM_Right=0; // Valor actual de PWM enviado al motor derecho

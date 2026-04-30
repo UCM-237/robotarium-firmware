@@ -33,13 +33,13 @@
 
 // --- CONFIGURACIÓN DEL TEST ---
 double VELOCIDAD_OBJETIVO = 0.01; // rad/s (ajusta según necesites)
-bool TEST_RUEDA_DERECHA =false;   // true para derecha, false para izquierda
+bool TEST_RUEDA_DERECHA = false;   // true para derecha, false para izquierda
 bool BACKWARDS= false; // true rueda hacia atras, false hacia adelante
 // ------------------------------
 // Uncomment only one
-//#define  AJUSTEFF
+#define  AJUSTEFF
 //#define TESTFF
-#define AJUSTEPID
+//#define AJUSTEPID
 //------------------------------
 int pwm_output=0;
 double w_objetivo=6.5;
@@ -64,13 +64,12 @@ void setup() {
   PID_RuedaL.setSetPoint(VELOCIDAD_OBJETIVO);
   PID_RuedaR.setSetPoint(VELOCIDAD_OBJETIVO);
 
-  PID_RuedaL.setFeedForwardParam(22.81,-69.4);
-  PID_RuedaR.setFeedForwardParam(25.62,-80.0);
+  PID_RuedaL.setFeedForwardParam(16.98,-48.71);
+  PID_RuedaR.setFeedForwardParam(16.85,-53.48);
   // Paso 2: Solo proporcional (Kp). Ki y Kd a CERO.
   // Un Kp de 2.0 o 5.0 es un buen inicio para motores de bajo coste.
-  PID_RuedaL.setControlerParam(30,5.0,5.0);
-  PID_RuedaR.setControlerParam(50.0,10.0,10.0);
-  // Configuración de interrupciones para encoders (necesario para calcular w real)
+  PID_RuedaL.setControlerParam(6,3.0,0.0);
+  PID_RuedaR.setControlerParam(10,1.0,0.0);  // Configuración de interrupciones para encoders (necesario para calcular w real)
   #ifdef ENCODER_CUADRATURA
     pinMode(miRobot.getPinLeftEncoder(), INPUT_PULLUP); // Canal A Izq
     pinMode(miRobot.getPinLeftEncoderB() , INPUT_PULLUP); // Canal B Izq
@@ -125,14 +124,17 @@ void loop() {
       unsigned long ahora = micros();
       unsigned long deltaTime=ahora-lastTime;
       instantW_L = (M_PI /1400.0) *(encoderL-encodercountLeftAnt)* 1000000 / (deltaTime);
+      
       encodercountLeftAnt=encoderL;
       instantW_R=(M_PI /1400.0) *(encoderR-encodercountRightAnt)* 1000000 / (deltaTime);
+     
       encodercountRightAnt=encoderR;
       lastTime=ahora;
+     
         // IMPORTANTE: Limitar la velocidad máxima para evitar picos por ruido
-    if (instantW_R > MAX_OPTIMAL_VEL) instantW_R = MAX_OPTIMAL_VEL;
+    /*if (instantW_R > MAX_OPTIMAL_VEL) instantW_R = MAX_OPTIMAL_VEL;
     if (instantW_L > MAX_OPTIMAL_VEL) instantW_L = MAX_OPTIMAL_VEL;
-      
+    */  
     #else
    // 1. Obtener el deltaTime de la ISR (usando sección crítica para evitar que cambie a mitad de lectura)
     noInterrupts();
@@ -155,7 +157,7 @@ void loop() {
   else {
     // Solo calculamos si hay un tiempo válido
     if (dtL > 0) {
-       instantW_L = (M_PI /10.0) *(encoderL-encodercountLeftAnt)* 1000000 / (deltaTimeLeft );
+       instantW_L = (M_PI /10.0) *(encoderL-encodercountLeftAnt)* 1000000 / (dtL );
        encodercountLeftAnt=encoderL;
     }
   }
@@ -164,8 +166,9 @@ void loop() {
   } 
   else {
     if (dtR > 0) {
-      instantW_R=(M_PI /10.0) *(encoderR-encodercountRightAnt)* 1000000 / (deltaTimeRight );
+      instantW_R=(M_PI /10.0) *(encoderR-encodercountRightAnt)* 1000000 / (dtR );
       encodercountRightAnt=encoderR;
+      Serial.println(dtR);
     }
   }
 
@@ -174,7 +177,7 @@ void loop() {
   if (backD) instantW_R *= -1.0;
 
  #endif
- 
+    
     // 3. PASAR POR EL FILTRO
     meanFilterLeft.AddValue(instantW_L);
     meanFilterRight.AddValue(instantW_R);
@@ -253,8 +256,8 @@ void loop() {
             PID_RuedaR.setSetPoint(w_objetivo);
             pwm_output= PID_RuedaR.feedForward(); 
             miRobot.moveRightWheel(pwm_output, wRight, BACKWARDS);
-            /*Serial.print("pwm: ");
-            Serial.print(pwm_output);*/
+            Serial.print("pwm: ");
+            Serial.print(pwm_output);
             Serial.print(", w_objetivo: ");
             Serial.println(w_objetivo);
             Serial.print(", w_real: ");
@@ -293,10 +296,10 @@ tpwmant=millis();
             pwm_output=constrain(pwm_output,MINPWM,MAXPWM);
             miRobot.moveRightWheel(pwm_output, wRight, BACKWARDS);
             if (millis() - ultimaImpresion > 50) {
-             /* Serial.print("pwm: ");
+             Serial.print("pwm: ");
               Serial.print(pwm_output);
               Serial.print("pwm_pid: ");
-              Serial.print(pwm_pid);*/
+              Serial.print(pwm_pid);
               Serial.print(", w_objetivo: ");
               Serial.print(w_objetivo);
               Serial.print(", w_real: ");
@@ -322,10 +325,10 @@ tpwmant=millis();
             Serial.print(pwm_output);*/
             if (millis() - ultimaImpresion > 250) {
             
-            /*Serial.print("pwm: ");
+            Serial.print("pwm: ");
             Serial.print(pwm_output);
             Serial.print(" pwm_pid: ");
-            Serial.print(pwm_pid);*/
+            Serial.print(pwm_pid);
             Serial.print("w_objetivo: ");
             Serial.print(w_objetivo);
             Serial.print(", w_real: ");
