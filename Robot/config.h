@@ -257,23 +257,22 @@
     #define L 10
     // Calibración FF y PID específica para este robot
       
-    #define MINPWM 30
+    #define MINPWM 10
     #define MAXPWM 255
     #define VRMIN 3.41
     #define VLMIN 12.36 
     
     // Rueda izquierda
-    #define A_L 9.12
-    #define B_L 18.90
+    #define A_L 8.82
+    #define B_L -10.38
     #define KP_L 5.0
-    #define KI_L 2.5
-    #define KD_L 0.0
+    #define KI_L 1.5
+    #define KD_L 0.001
     // Rueda derecha
-     // Rueda izquierda
-    #define A_R 8.5
-    #define B_R 19.0
-    #define KP_R 4.0
-    #define KI_R 2.5
+    #define A_R 8.84
+    #define B_R -5.21
+    #define KP_R 4.5
+    #define KI_R 1.5
     #define KD_R 0.0
 #elif ROBOT_ID == 7 //SAM
     #define SMALLBOT
