@@ -156,10 +156,13 @@ int mqttPort = 1883;
 // Es fundamental para que el servidor sepa qué robot de los 10 está enviando datos
 const char device[] = "arduinoClient";
 unsigned long lastSendTime = 0;    // guarda el último momento en que enviamos
-const unsigned long interval = 25000;   //el tiempo que queremos para muestrear
+const unsigned long interval = 100;   //el tiempo que queremos para muestrear
 
 // Para decodificar el JSON
 StaticJsonDocument<200> doc;
+
+void op_mqtt_turn_robot(double angle);
+
 #endif
 #endif
 #ifdef BIGBOT
@@ -326,7 +329,7 @@ void loop() {
      DEBUG_PRINT("operationFlag: \t");
       DEBUG_PRINTLN(server_operation->InitFlag);
       DEBUG_PRINT("operation: \t");
-      DEBUG_PRINTLN(server_operation->op);
+      DEBUG_PRINTLN(server_operation->op);  
       DEBUG_PRINT("RobotID: \t");
       DEBUG_PRINTLN(server_operation->id); 
     
@@ -437,6 +440,30 @@ void loop() {
     double fD=wLeft/( 2*PI );
     double fI=wRight/( 2*PI );
     
+    // 4A Caso de giro preciso
+    if (isTurning) {
+    // Verificamos si ya llegamos al objetivo
+    if (encoderR >= targetTicks || encoderL >= targetTicks) {
+      // FIN DEL GIRO
+      wheelControlerLeft.setSetpoint(0);
+      wheelControlerRight.setSetpoint(0);
+      robot.fullStop();
+      isTurning = false;
+      DEBUG_PRINTLN("Giro completado.");
+    } else {
+      // SEGUIR GIRANDO
+      // Aplicamos una velocidad constante de giro (ej. 10 rad/s)
+      float turningSpeed = 10.0; 
+      
+      if (turnDirection > 0) { // Izquierda
+        wheelControlerLeft.setSetpoint(-turningSpeed);
+        wheelControlerRight.setSetpoint(turningSpeed);
+      } else { // Derecha
+        wheelControlerLeft.setSetpoint(turningSpeed);
+        wheelControlerRight.setSetpoint(-turningSpeed);
+      }
+    }
+  }
     // 5. ALGORITMO DE CONTROL PID
     if(control)
     { 
@@ -516,7 +543,7 @@ void loop() {
     
     // Actualiza la marca de tiempo para el próximo ciclo de muestreo
   timeAfter = currentTime; 
-  #ifdef SMALLBOT
+  #ifdef SMALLBOT;
    envio_datos(V_robot,  W_robot ,  wRight ,  wLeft,  fD, fI);  
   #endif
   }
@@ -1322,6 +1349,16 @@ void onMqttMessage(int messageSize){
             op_moveRobot(wlinealRight ,wlinealLeft);
             
           }
+          elseif (part3=="turn"){
+            Serial.println(" Llegó mensaje del topic TURN");
+            double angle = doc["angle"];
+            Serial.print("ang =");
+            Serial.print(angle); 
+            op_moveRobot(wlinealRight ,wlinealLeft);
+           
+          }
+          }
+          
         }
         else {
           Serial.println("El agente recibido no ha sido el solicitado sino el agente"); 
@@ -1530,11 +1567,12 @@ void envio_datos(double vLineal, double vAngular , double wRight , double wLeft,
 //IPAddress ip = WiFi.localIP();
 //Serial.println( ip );
   unsigned long currentMillis = millis();
+     
 
   // Si han pasado 20 segundos desde el último envío
   if (currentMillis - lastSendTime >= interval) {
     lastSendTime = currentMillis;  // actualizar el último envío
-
+  DEBUG_PRINTLN("envio_datos");
    // creamos los strig de los topic 
    //como tienen cierto paralelismo se an  generado en conjunto
    String ID =String (robot.getRobotID());
@@ -1556,9 +1594,9 @@ void envio_datos(double vLineal, double vAngular , double wRight , double wLeft,
     mqttClient.print(jsonBuffervelocity);
     mqttClient.endMessage();
 
-    Serial.println("Mensaje enviado en topic 'velocity':");
-    Serial.println(jsonBuffervelocity);
-    Serial.println("esta llegando");
+    DEBUG_PRINTLN("Mensaje enviado en topic 'velocity':");
+    DEBUG_PRINTLN(jsonBuffervelocity);
+    DEBUG_PRINTLN("esta llegando");
 
 
         //envio topic wheel
@@ -1575,8 +1613,8 @@ void envio_datos(double vLineal, double vAngular , double wRight , double wLeft,
     mqttClient.print(jsonBufferwheel);
     mqttClient.endMessage();
 
-    Serial.println("Mensaje enviado en topic 'wheel':");
-    Serial.println(jsonBufferwheel);
+    DEBUG_PRINTLN("Mensaje enviado en topic 'wheel':");
+    DEBUG_PRINTLN(jsonBufferwheel);
     //Serial.println("esta llegando");
   
    
@@ -1601,5 +1639,51 @@ void envio_datos(double vLineal, double vAngular , double wRight , double wLeft,
     //delay(500);
   }
 }
+
+void op_mqtt_turn_robot(double angle)
+{
+  DEBUG_PRINT("op turn:");
+  DEBUG_PRINTLN(OP_TURN_ROBOT);
+  
+  bool turnRight;
+  // Por  seguridad
+  if (angle >M_PI) {
+    angle=M_PI;  
+  }
+  if (angle <-M_PI){
+    angle=-M_PI;
+  }
+  DEBUG_PRINT("angle:");
+  DEBUG_PRINTLN(angle);
+
+  // 1. DETERMINACIÓN DEL SENTIDO DE GIRO:
+  // Si el ángulo es negativo, giramos a la derecha; si es positivo, a la izquierda.
+  if(angle < 0)
+  {
+    turnRight = true;
+    angle = angle * (-1); // Trabajamos con el valor absoluto para los cálculos
+  }
+  else
+  {
+    turnRight = false;
+  }
+
+ // 1. Calcular distancia lineal que debe recorrer cada rueda
+    // s = theta * (D/2)
+    float distance = abs(angle) * (robot.getRobotDiameter() / 2.0);
+    
+    // 2. Convertir distancia a ticks de encoder
+    // ticks = (distancia / circunferencia) * pulsos_por_vuelta
+    targetTicks = (distance / (2 * M_PI * robot.getRobotWheelRadius())) * MAX_ENCODER_STEPS*TURN_CORRECTION_FACTOR;
+    
+    // 3. Resetear contadores y configurar dirección
+    encoder_countRight = 0;
+    encoder_countLeft = 0;
+    turnDirection = (angle > 0) ? 1 : -1;
+    isTurning = true;
+    
+    DEBUG_PRINTLN("Giro iniciado...");
+}
+
 #endif
 #endif

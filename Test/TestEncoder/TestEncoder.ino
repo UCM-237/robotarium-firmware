@@ -2,7 +2,7 @@
 #include <math.h>
 #include <Arduino.h>
 
-#define ENCODER_CUADRATURA
+//#define ENCODER_CUADRATURA
 
 #ifdef ENCODER_CUADRATURA
 // The Arduino MKR WiFi 1010 supports external interrupts on almost all digital and analog pins, specifically 0, 1, 4, 5, 6, 7, 8, A1 (16), and A2 (17)
@@ -84,8 +84,8 @@ void loop() {
 }
 #else
 // Definiciones basadas en tus archivos
-const int pinEncoderIzquierdo = 3; // Ajusta según tu robot.h
-const int pinEncoderDerecho = 2;   // Ajusta según tu robot.h
+const int pinEncoderIzquierdo = 1; // Ajusta según tu robot.h
+const int pinEncoderDerecho = 0;   // Ajusta según tu robot.h
 
 volatile unsigned long pulsosIzquierdo = 0;
 volatile unsigned long pulsosDerecho = 0;

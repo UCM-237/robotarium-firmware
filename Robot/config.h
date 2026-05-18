@@ -43,7 +43,7 @@
 #define ROBOT_ID 10 
 */
 
-#define ROBOT_ID 6 
+#define ROBOT_ID 6
 
 // 2. PARÁMETROS GLOBALES (Comunes o por defecto)
 
@@ -192,10 +192,11 @@
     #define SMALLBOT
     #define H_BRIDGE_RED
     #define ENCODER_CUADRATURA
-    #define ROBOT_WHEEL_DIAMETER 6.7
-    #define ROBOT_DIAMETER 14.5
+    #define ROBOT_WHEEL_DIAMETER 6.0
+    #define ROBOT_DIAMETER 11.5
     #define ARDUINO_TYPE_MKR
     #define L 10
+    #define TURN_CORRECTION_FACTOR  2.3
     // Calibración FF y PID específica para este robot
     
   
@@ -233,21 +234,22 @@
     #define VRMIN 3.41
     #define VLMIN 12.36 
     
+    
     // Rueda izquierda
-    #define A_L 9.12
-    #define B_L 18.90
+    #define A_L 16.98
+    #define B_L -48.71
     #define KP_L 5.0
     #define KI_L 2.5
     #define KD_L 0.0
     // Rueda derecha
      // Rueda izquierda
-    #define A_R 8.5
-    #define B_R 19.0
+    #define A_R 16.85
+    #define B_R -53.48
     #define KP_R 4.0
     #define KI_R 2.5
     #define KD_R 0.0
-
-#elif ROBOT_ID == 7 //MERRY
+    
+#elif ROBOT_ID == 8 //MERRY
     #define SMALLBOT
     #define H_BRIDGE_BLACK
 
@@ -275,7 +277,7 @@
     #define KP_R 4.0
     #define KI_R 2.5
     #define KD_R 0.0
-#elif ROBOT_ID == 7 //SAM
+#elif ROBOT_ID == 9 //SAM
     #define SMALLBOT
     #define H_BRIDGE_RED
     #define ENCODER_CUADRATURA

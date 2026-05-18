@@ -158,6 +158,11 @@ volatile unsigned encodercountLeftAnt= 0;  // Contador de pulsos brutos (izquier
 int PWM_Right=0; // Valor actual de PWM enviado al motor derecho
 int PWM_Left=0;  // Valor actual de PWM enviado al motor izquierdo
 
+//---- CONTROL PRECISO DE GIRO-----
+bool isTurning = false;
+long targetTicks = 0;
+int turnDirection = 1; // 1 para izquierda, -1 para derecha
+
 // Setpoints de velocidad y banderas de dirección (back = marcha atrás)
 double SetpointD, SetpointI, SetpointAnterior=0;
 bool backD=false, backI=false;
