@@ -46,6 +46,18 @@ char pass[] = SECRET_PASS;
 int status = WL_IDLE_STATUS;     
 #endif
 
+#ifdef ENCODER_CUADRATURA
+
+  volatile long countsL;
+  volatile long countsR;
+  volatile byte lastStateL;
+  volatile byte lastStateR;
+  volatile long countsL_Last;
+  volatile long countsR_Last;
+  
+
+
+#endif
 using namespace std;
 unsigned char packetBuffer[256]; // Buffer para almacenar paquetes recibidos por Serial
 
@@ -54,12 +66,7 @@ unsigned char packetBuffer[256]; // Buffer para almacenar paquetes recibidos por
 MeanFilter<double> meanFilterRight(10);
 MeanFilter<double> meanFilterLeft(10);
 const double MAX_OPTIMAL_VEL=20; // Límite de seguridad en rad/s
-#ifdef ENCODER_CUADRATURA
-  volatile long countsL = 0;
-  volatile long countsR = 0;
-  volatile byte lastStateL = 0;
-  volatile byte lastStateR = 0;
-#endif
+
 // --- VARIABLES DE OPERACIÓN Y COMUNICACIÓN ---
 struct appdata operation_send;    // Estructura para enviar datos a la Raspberry Pi
 struct appdata *server_operation; // Puntero para interpretar los datos recibidos como estructura appdata
@@ -162,7 +169,7 @@ const unsigned long interval = 100;   //el tiempo que queremos para muestrear
 StaticJsonDocument<200> doc;
 
 void op_mqtt_turn_robot(double angle);
-
+void mqtt_op_done(String op, String status = "done");
 #endif
 #endif
 #ifdef BIGBOT
@@ -202,8 +209,9 @@ void setup() {
             // El LED del Arduino debería quedarse esperando aquí.
       }
       delay(500);
-      DEBUG_PRINTLN("¡Ahora sí! Comunicacion Serie PK");
+      DEBUG_PRINTLN("¡Ahora sí! Comunicacion Serie OK");
     #endif
+      DEBUG_PRINTLN("Configurando pines");
     // Inicializa la configuración de pines según el hardware (MKR/Nano y tipo de puente en H)
     robot.pinSetup();
     
@@ -212,6 +220,7 @@ void setup() {
      
    // Configuración de interrupciones para encoders (necesario para calcular w real)
   #ifdef ENCODER_CUADRATURA
+    DEBUG_PRINTLN("Encoder cuadratura");
     pinMode(robot.getPinLeftEncoder(), INPUT_PULLUP); // Canal A Izq
     pinMode(robot.getPinLeftEncoderB() , INPUT_PULLUP); // Canal B Izq
     pinMode(robot.getPinRightEncoder() , INPUT_PULLUP); // Canal A Der
@@ -267,9 +276,14 @@ void setup() {
 
     #ifdef ARDUINO_TYPE_MKR
     #ifdef SMALLBOT
+    
+    DEBUG_PRINT("Conectando a la Wifi: ");
+    DEBUG_PRINTLN(ssid);
     WiFi.begin(ssid,pass);
+    DEBUG_PRINTLN("Wifi begin");
     while(WiFi.status() != WL_CONNECTED){
-      DEBUG_PRINTLN(".");
+      DEBUG_PRINTLN("Conectando a la Wifi...");
+      //DEBUG_PRINTLN(WiFi.status());
       delay(500);
     }
     DEBUG_PRINTLN(".");
@@ -283,7 +297,7 @@ void setup() {
       while(1);
     }
     const char topic[]="#";
-    mqttClient.subscribe("data");
+    //mqttClient.subscribe("data");
     mqttClient.subscribe("agent/#");
     //mqttClient.subscribe(topic);
     DEBUG_PRINT("Suscrito al tema: ");
@@ -304,9 +318,10 @@ void setup() {
   */
   
 void loop() {
- // 1. GESTIÓN DE TIEMPO Y COMUNICACIONES
+  // 1. GESTIÓN DE TIEMPO Y COMUNICACIONES
   currentTime = millis(); // Registra el tiempo actual para el control de frecuencia
   //serialEvent();          // Verifica si han llegado bytes por el puerto serie (Raspberry Pi)
+  
   #ifdef BIGBOT
   if(Serial1.available()){
       // Lee una ráfaga de bytes y los guarda en 'packetBuffer'
@@ -322,6 +337,7 @@ void loop() {
     DEBUG_PRINT("Bytes leidos: \t");
     DEBUG_PRINTLN(rlen);
   }
+  
   // 2. PROCESAMIENTO DE COMANDOS SERIALES
   if (serialCom) {
     // Validación: Solo procesa si la cabecera coincide con INIT_FLAG (112)
@@ -339,6 +355,7 @@ void loop() {
     serialCom = false; // Reinicia la bandera tras procesar el paquete
   }
   #endif
+  
   // Mantiene viva la conexión MQTT
   #ifdef ARDUINO_TYPE_MKR
   #ifdef SMALLBOT
@@ -351,12 +368,11 @@ void loop() {
   
   // 3. PREPARACIÓN DE DATOS DE SENSORES
   int auxPWMD = 0, auxPWMI = 0; // Variables auxiliares para evitar enviar PWM repetido
-     // 4. BUCLE DE LECTURA DE ENCODERS(Ejecutado cada SAMPLINGTIME, ej: 10ms)
+     // 4. BUCLE DE CONTROL(Ejecutado cada SAMPLINGTIME, ej: 10ms)
     
-  if ((currentTime - timeAfter)>= 10) {
-    // 4. BUCLE DE LECTURA DE ENCODERS(Ejecutado cada SAMPLINGTIME, ej: 10ms)
-   // Ejecutamos el bucle de control cada 10ms (100Hz) como en tu Robot.ino original
-  if (millis() - lastMillis >= 10) {
+  if ((currentTime - timeAfter)>= SAMPLINGTIME) {
+    // 5. Lectura de los sensores
+    
     #ifdef ENCODER_CUADRATURA
       noInterrupts();
       long encoderR=countsR;
@@ -419,17 +435,16 @@ void loop() {
 
  #endif
  
-    // 3. PASAR POR EL FILTRO
+    // 6. PASAR POR EL FILTRO
     meanFilterLeft.AddValue(instantW_L);
     meanFilterRight.AddValue(instantW_R);
 
-    lastMillis = millis();
-  }
-  // 4. USAR EL VALOR FILTRADO PARA EL CONTROL Y TELEMETRÍA
+ 
+  // 7. USAR EL VALOR FILTRADO PARA EL CONTROL Y TELEMETRÍA
     double wLeft = meanFilterLeft.GetFiltered();
     double wRight = meanFilterRight.GetFiltered();
 
-    // 5. CINEMÁTICA DEL ROBOT (Estimación de velocidad del chasis)
+    // 8. CINEMÁTICA DEL ROBOT (Estimación de velocidad del chasis)
     // v = w * r
     double vL = wLeft * robot.getRobotWheelRadius();
     double vR = wRight* robot.getRobotWheelRadius();
@@ -440,101 +455,96 @@ void loop() {
     double fD=wLeft/( 2*PI );
     double fI=wRight/( 2*PI );
     
-    // 4A Caso de giro preciso
+    // 9 Caso de giro preciso
     if (isTurning) {
-    // Verificamos si ya llegamos al objetivo
-    if (encoderR >= targetTicks || encoderL >= targetTicks) {
-      // FIN DEL GIRO
-      wheelControlerLeft.setSetpoint(0);
-      wheelControlerRight.setSetpoint(0);
-      robot.fullStop();
-      isTurning = false;
-      DEBUG_PRINTLN("Giro completado.");
-    } else {
-      // SEGUIR GIRANDO
-      // Aplicamos una velocidad constante de giro (ej. 10 rad/s)
-      float turningSpeed = 10.0; 
-      
-      if (turnDirection > 0) { // Izquierda
-        wheelControlerLeft.setSetpoint(-turningSpeed);
-        wheelControlerRight.setSetpoint(turningSpeed);
-      } else { // Derecha
-        wheelControlerLeft.setSetpoint(turningSpeed);
-        wheelControlerRight.setSetpoint(-turningSpeed);
+      // Verificamos si ya llegamos al objetivo
+      if (abs(encoderR-countsR_Last) >= abs(targetTicks) || abs(encoderL-countsL_Last) >= abs(targetTicks)) {
+        // FIN DEL GIRO
+        wheelControlerLeft.setSetPoint(0);
+        wheelControlerRight.setSetPoint(0);
+        robot.fullStop();
+        isTurning = false;
+        DEBUG_PRINTLN("Giro completado.");
+        DEBUG_PRINT("Ticks L: ");
+        DEBUG_PRINT(encoderL-countsL_Last);
+        DEBUG_PRINT(" | Ticks R: ");
+        DEBUG_PRINTLN(encoderR-countsR_Last);
+        mqtt_op_done("turn"); 
+      } 
+      else {
+        // SEGUIR GIRANDO
+        // Aplicamos una velocidad constante de giro (ej. 10 rad/s)
+        float turningSpeed = 10.0; 
+        //DEBUG_PRINTLN("Girando");
+        DEBUG_PRINT(targetTicks);
+        DEBUG_PRINT("Ticks L: ");
+        DEBUG_PRINT(encoderL-countsL_Last);
+        DEBUG_PRINT(" | Ticks R: ");
+        DEBUG_PRINTLN(encoderR-countsR_Last);
+        if (turnDirection > 0) { // Izquierda
+          wheelControlerLeft.setSetPoint(-turningSpeed);
+          wheelControlerRight.setSetPoint(turningSpeed);
+        } 
+        else { // Derecha
+          wheelControlerLeft.setSetPoint(turningSpeed);
+          wheelControlerRight.setSetPoint(-turningSpeed);
+        }
       }
-    }
   }
-    // 5. ALGORITMO DE CONTROL PID
+    // 9. ALGORITMO DE CONTROL PID
     if(control)
     { 
-    // 5. CÁLCULO DE POTENCIA INICIAL (FeedForward):
-    // El FeedForward estima el PWM necesario basándose en la velocidad deseada 
-    // antes de que el PID empiece a corregir errores.
-    int pwm_ff_l=0,pwm_ff_r=0,pwm_pid_l=0,pwm_pid_r=0;
-    pwm_ff_l=wheelControlerLeft.feedForward();
-    pwm_ff_r=wheelControlerRight.feedForward();
-    pwm_pid_l=wheelControlerLeft.pid(wLeft);
-    pwm_pid_r=wheelControlerRight.pid(wRight);
-    
-    PWM_Left = constrain(wheelControlerLeft.feedForward()+wheelControlerLeft.pid(wLeft),MINPWM,MAXPWM);
-    PWM_Right = constrain(wheelControlerRight.feedForward()+wheelControlerRight.pid(wRight),MINPWM,MAXPWM);
-
-    if((wheelControlerLeft.getSetPoint()<1.0 && wheelControlerLeft.getSetPoint()>-1.0) &&(wheelControlerRight.getSetPoint()<1.0 && wheelControlerRight.getSetPoint()>-1.0)){
-      PWM_Left=0;
-      PWM_Right=0;
-    }
-    // DEBUG
-    static unsigned long ultimaImpresion = 0;
-    if (millis() - ultimaImpresion > 1250) { // Imprime cada 250ms
-      DEBUG_PRINT("wLeft: "); 
-      DEBUG_PRINT(wLeft);
-      DEBUG_PRINT(" wRight: "); 
-      DEBUG_PRINTLN(wRight);
-      DEBUG_PRINT("v(cm/s): "); 
-      DEBUG_PRINT(V_robot);
-      DEBUG_PRINT("w(rad/s): "); 
-      DEBUG_PRINTLN(W_robot);
-      DEBUG_PRINT(" pwm_ff_d: ");
-      DEBUG_PRINT( pwm_ff_r);
-      DEBUG_PRINT(" pwm_pid_d: ");
-      DEBUG_PRINT( pwm_pid_r);
-      DEBUG_PRINT(" pwm_de: ");
-      DEBUG_PRINTLN( PWM_Right);
-      DEBUG_PRINT(" pwm_ff_l: ");
-      DEBUG_PRINT( pwm_ff_l);
-      DEBUG_PRINT(" pwm_pid_l: ");
-      DEBUG_PRINT( pwm_pid_l);
-      DEBUG_PRINT(" pwm_iz: ");
-      DEBUG_PRINTLN( PWM_Left);
-     // Serial.print(" pwm_iz: ");
-     // Serial.print(PWM_Left);
-     // Serial.print(" pwm_de: ");
-     // Serial.println(PWM_Right);
+      // 9.1. CÁLCULO DE POTENCIA INICIAL (FeedForward):
+      // El FeedForward estima el PWM necesario basándose en la velocidad deseada 
+      // antes de que el PID empiece a corregir errores.
+      int pwm_ff_l=0,pwm_ff_r=0,pwm_pid_l=0,pwm_pid_r=0;
+      pwm_ff_l=wheelControlerLeft.feedForward();
+      pwm_ff_r=wheelControlerRight.feedForward();
+      pwm_pid_l=wheelControlerLeft.pid(wLeft);
+      pwm_pid_r=wheelControlerRight.pid(wRight);
       
-      ultimaImpresion = millis();
-  }
-    /*DEBUG_PRINT("PWM_Left: ");
-    DEBUG_PRINT(PWM_Left);
-    DEBUG_PRINT(" Left FWR: ");
-    DEBUG_PRINTLN(backI);
+      PWM_Left = constrain(wheelControlerLeft.feedForward()+wheelControlerLeft.pid(wLeft),MINPWM,MAXPWM);
+      PWM_Right = constrain(wheelControlerRight.feedForward()+wheelControlerRight.pid(wRight),MINPWM,MAXPWM);
   
-    DEBUG_PRINT("PWM_Right: ");
-    DEBUG_PRINT(PWM_Right);
-    DEBUG_PRINT(" Right fwr: ");
-    DEBUG_PRINTLN(backD);
-    */
-
-    // 6. EJECUCIÓN FÍSICA:
+      if((wheelControlerLeft.getSetPoint()<1.0 && wheelControlerLeft.getSetPoint()>-1.0) &&(wheelControlerRight.getSetPoint()<1.0 && wheelControlerRight.getSetPoint()>-1.0)){
+        PWM_Left=0;
+        PWM_Right=0;
+      }
+      // DEBUG
+      static unsigned long ultimaImpresion = 0;
+      if (millis() - ultimaImpresion > 5000) { // Imprime cada 250ms
+        DEBUG_PRINT("wLeft: "); 
+        DEBUG_PRINT(wLeft);
+        DEBUG_PRINT(" wRight: "); 
+        DEBUG_PRINTLN(wRight);
+        DEBUG_PRINT("v(cm/s): "); 
+        DEBUG_PRINT(V_robot);
+        DEBUG_PRINT("w(rad/s): "); 
+        DEBUG_PRINTLN(W_robot);
+        DEBUG_PRINT(" pwm_ff_d: ");
+        DEBUG_PRINT( pwm_ff_r);
+        DEBUG_PRINT(" pwm_pid_d: ");
+        DEBUG_PRINT( pwm_pid_r);
+        DEBUG_PRINT(" pwm_de: ");
+        DEBUG_PRINTLN( PWM_Right);
+        DEBUG_PRINT(" pwm_ff_l: ");
+        DEBUG_PRINT( pwm_ff_l);
+        DEBUG_PRINT(" pwm_pid_l: ");
+        DEBUG_PRINT( pwm_pid_l);
+        DEBUG_PRINT(" pwm_iz: ");
+        DEBUG_PRINTLN( PWM_Left);
+        ultimaImpresion = millis();
+    }
+    
+    // 9.2. EJECUCIÓN FÍSICA:
     // Se envían las señales a los puentes en H a través de la clase robot.
     robot.moveLeftWheel(PWM_Left, wheelControlerLeft.getSetPoint(), wheelControlerLeft.getBack());
     robot.moveRightWheel(PWM_Right, wheelControlerRight.getSetPoint(),wheelControlerRight.getBack());
 
  
     }   
-   // 6. ACTUALIZACIÓN DE MOTORES (Escritura en Hardware)
-    // Solo envía la instrucción al puente en H si el valor de PWM ha cambiado
- 
-   // 7. TELEMETRÍA
+   
+    // 10. TELEMETRÍA
     // Si la Raspberry Pi solicitó datos (sendDataSerial), envía el estado de los sensores cada 1s para no saturar
     if(sendDataSerial && (currentTime - timeAfter) >= TELEMETRYTIME)
     {
@@ -542,16 +552,14 @@ void loop() {
     }
     
     // Actualiza la marca de tiempo para el próximo ciclo de muestreo
-  timeAfter = currentTime; 
-  #ifdef SMALLBOT;
-   envio_datos(V_robot,  W_robot ,  wRight ,  wLeft,  fD, fI);  
-  #endif
+    timeAfter = currentTime;
+    lastMillis = millis();
+  
+    #ifdef SMALLBOT;
+      envio_datos(V_robot,  W_robot ,  wRight ,  wLeft,  fD, fI);  
+    #endif
   }
-    // 8.Calculo de velocidades recurrentes 
-    //double vLineal=(robot.getRobotWheelRadius() /2)*(wRight + wLeft);
-    //double wAngular = (robot.getRobotWheelRadius() /robot.getL())*(wRight - wLeft) ;
-// 9.llamada evio de los topic al servidor
-   
+    
 }  
 
 /*
@@ -1261,16 +1269,9 @@ void onMqttMessage(int messageSize){
 
 
 
-  Serial.print("Mensaje recibido en el topic ");
+  //DEBUG_PRINT("Mensaje recibido en el topic ");
   String topicausiliar = mqttClient.messageTopic();//guardamos topic para poder comparar 
-  Serial.println(topicausiliar);
-
- 
-
-  //Serial.println(mqttClient.messageTopic());
-  //Serial.print(" Tamaño: ");
-  //Serial.print(messageSize);
-  //Serial.println(" bytes");//Json
+  //DEBUG_PRINTLN(topicausiliar);
   String incoming = "";//Json
 
     while(mqttClient.available()){
@@ -1278,28 +1279,18 @@ void onMqttMessage(int messageSize){
     }
   DeserializationError error = deserializeJson(doc, incoming);
   
-  Serial.print("contenido mansage: ");
-  //Serial.println(incoming);
-//de aqui
- //String topic = mqttClient.messageTopic();
- //if (topic == "data") {
-   // Serial.println("a llegado el topic data");
-  //}
-  if (topicausiliar.equals("data")) {//
-    Serial.println("Llegó mensaje del topic data");
-  //const char* move = doc["x"];
-  //serializeJson(doc["move"], Serial);
-  //Serial.print("Tu estas viendo: ");
-  //Serial.println(move);
-//a aqui
+  //DEBUG_PRINT("Mensaje: ");
+  //DEBUG_PRINTLN(incoming);
+
+  if (topicausiliar.equals("data")) {
+    //DEBUG_PRINTLN("Llegó mensaje del topic data");
     float x = doc["x"], y = doc["y"], yaw = doc["yaw"];
-    Serial.println();
-    Serial.print("x=");
-    Serial.print(x); 
-    Serial.print(", y=");
-    Serial.print(y); 
-    Serial.print(", yaw=");
-    Serial.println(yaw); 
+    /*DEBUG_PRINT("x=");
+    DEBUG_PRINT(x); 
+    DEBUG_PRINT(", y=");
+    DEBUG_PRINT(y); 
+    DEBUG_PRINT(", yaw=");
+    DEBUG_PRINTLN(yaw); */
   }
   // si el topic es move mover el robot
 
@@ -1307,76 +1298,60 @@ void onMqttMessage(int messageSize){
     // Buscar separadores
     int firstSlash = topicausiliar.indexOf('/');
     
-
-    //if (firstSlash == -1 || secondSlash == -1) {
-    //  return result; // formato no válido
-   //}
-
     String part1 = topicausiliar.substring(0, firstSlash);//
-    Serial.println(part1);
+    //DEBUG_PRINTLN(part1);
+    
     if (part1 == "agent") {
      int secondSlash = topicausiliar.indexOf('/', firstSlash + 1);
      String part2 = topicausiliar.substring(firstSlash + 1, secondSlash);//parametro numero agente
      int id= robot.getRobotID(); // dentificador dl agente
-     //String textoid = String(id);
-      
-      
-       // Serial.print(textoid);
-      if (part2 == String(id)){
+     if (part2 == String(id)){
         String part3 = topicausiliar.substring(secondSlash + 1);//parametro operacion  
         if (part3 =="move"){
-      //if (topicausiliar.endsWith("/move")){ //version de que contiene move
-      //else if ((topicausiliar.equals("agent/4/move")){ //version de si es justo agent/4/move
-      //conversion de velocidad linial y angular a velocidad motor derecho e izquierdo
-            Serial.println(" Llegó mensaje del topic MOVE");
+            //DEBUG_PRINTLN(" Llegó mensaje del topic MOVE");
             double V = doc["v"], W = doc["w"];
-            Serial.print("V=");
-            Serial.print(V); 
-            Serial.print(", W=");
-            Serial.println(W); 
-            //
-            Serial.println(robot.getL() );
-            Serial.println(robot.getRobotWheelRadius());
-            Serial.println(((robot.getL() / 2.0)));
-
+            /*DEBUG_PRINT("V=");
+            DEBUG_PRINT(V); 
+            DEBUG_PRINT(", W=");
+            DEBUG_PRINTLN(W); */
             double wlinealRight=(V + (W* (robot.getL() / 2.0))) / robot.getRobotWheelRadius() ;//derecha
             double wlinealLeft=(V - (W* (robot.getL() / 2.0))) / robot.getRobotWheelRadius() ;//izquierda
-            Serial.print("tu valor de velocidad angular Motor derecho es :");
-            Serial.println(wlinealRight);
-            Serial.print("tu valor de velocidad angular Motor izquierdo es :");
-            Serial.println(wlinealLeft);
-            
+            /*DEBUG_PRINT("tu valor de velocidad angular Motor derecho es :");
+            DEBUG_PRINTLN(wlinealRight);
+            DEBUG_PRINT("tu valor de velocidad angular Motor izquierdo es :");
+            DEBUG_PRINTLN(wlinealLeft);
+            */
             op_moveRobot(wlinealRight ,wlinealLeft);
             
           }
-          elseif (part3=="turn"){
-            Serial.println(" Llegó mensaje del topic TURN");
+          else if (part3=="turn"){
+            DEBUG_PRINTLN(" Llegó mensaje del topic TURN");
             double angle = doc["angle"];
-            Serial.print("ang =");
-            Serial.print(angle); 
-            op_moveRobot(wlinealRight ,wlinealLeft);
+            DEBUG_PRINT("ang =");
+            DEBUG_PRINTLN(angle); 
+            op_mqtt_turn_robot(angle);
            
           }
-          }
-          
         }
+          
         else {
-          Serial.println("El agente recibido no ha sido el solicitado sino el agente"); 
-          Serial.println(part2); 
+          //DEBUG_PRINT("El agente recibido no ha sido el solicitado sino el agente"); 
+          //DEBUG_PRINTLN(part2); 
         }
         
     //
   }
-else{ Serial.print("quien es este ");}
-  }
+  else{ 
+    DEBUG_PRINTLN("quien es este ");
+    }
   
+  } 
 
   if (error) {
-    Serial.print("Error: ");
-    Serial.println(error.c_str());
+    DEBUG_PRINT("Error: ");
+    DEBUG_PRINTLN(error.c_str());
     return;
   }
-  Serial.println("--------------------------------------------------");
 }
  
 /*
@@ -1572,7 +1547,7 @@ void envio_datos(double vLineal, double vAngular , double wRight , double wLeft,
   // Si han pasado 20 segundos desde el último envío
   if (currentMillis - lastSendTime >= interval) {
     lastSendTime = currentMillis;  // actualizar el último envío
-  DEBUG_PRINTLN("envio_datos");
+  //DEBUG_PRINTLN("envio_datos");
    // creamos los strig de los topic 
    //como tienen cierto paralelismo se an  generado en conjunto
    String ID =String (robot.getRobotID());
@@ -1594,10 +1569,10 @@ void envio_datos(double vLineal, double vAngular , double wRight , double wLeft,
     mqttClient.print(jsonBuffervelocity);
     mqttClient.endMessage();
 
-    DEBUG_PRINTLN("Mensaje enviado en topic 'velocity':");
+    /*DEBUG_PRINTLN("Mensaje enviado en topic 'velocity':");
     DEBUG_PRINTLN(jsonBuffervelocity);
     DEBUG_PRINTLN("esta llegando");
-
+*/
 
         //envio topic wheel
 
@@ -1613,8 +1588,9 @@ void envio_datos(double vLineal, double vAngular , double wRight , double wLeft,
     mqttClient.print(jsonBufferwheel);
     mqttClient.endMessage();
 
-    DEBUG_PRINTLN("Mensaje enviado en topic 'wheel':");
+  /*  DEBUG_PRINTLN("Mensaje enviado en topic 'wheel':");
     DEBUG_PRINTLN(jsonBufferwheel);
+    */
     //Serial.println("esta llegando");
   
    
@@ -1644,7 +1620,7 @@ void op_mqtt_turn_robot(double angle)
 {
   DEBUG_PRINT("op turn:");
   DEBUG_PRINTLN(OP_TURN_ROBOT);
-  
+  angle =angle *M_PI/180.0;
   bool turnRight;
   // Por  seguridad
   if (angle >M_PI) {
@@ -1671,18 +1647,41 @@ void op_mqtt_turn_robot(double angle)
  // 1. Calcular distancia lineal que debe recorrer cada rueda
     // s = theta * (D/2)
     float distance = abs(angle) * (robot.getRobotDiameter() / 2.0);
-    
+    //DEBUG_PRINTLN(distance);
     // 2. Convertir distancia a ticks de encoder
     // ticks = (distancia / circunferencia) * pulsos_por_vuelta
-    targetTicks = (distance / (2 * M_PI * robot.getRobotWheelRadius())) * MAX_ENCODER_STEPS*TURN_CORRECTION_FACTOR;
     
+    targetTicks = (long) (round((distance / (2.0 * M_PI * robot.getRobotWheelRadius())) * MAX_ENCODER_STEPS*TURN_CORRECTION_FACTOR));
+    /*DEBUG_PRINTLN(targetTicks);
+    DEBUG_PRINTLN(MAX_ENCODER_STEPS);
+    DEBUG_PRINTLN(TURN_CORRECTION_FACTOR);*/
     // 3. Resetear contadores y configurar dirección
-    encoder_countRight = 0;
-    encoder_countLeft = 0;
+    countsL_Last = countsL;
+    countsR_Last = countsR;
     turnDirection = (angle > 0) ? 1 : -1;
+    if (turnDirection <0) targetTicks*=-1;
     isTurning = true;
     
     DEBUG_PRINTLN("Giro iniciado...");
+}
+
+// --- FUNCIÓN DE NOTIFICACIÓN ---
+
+void mqtt_op_done(String op, String status) {
+
+    String topic = "agent/" + String(ROBOT_ID) + "/feedback";
+    
+    // Construimos un JSON genérico reutilizable
+    String payload = "{\"status\": \"" + status + "\", \"op\": \"" + op + "\"}";
+    
+    // Enviamos por el cliente MQTT de Arduino
+    mqttClient.beginMessage(topic);
+    mqttClient.print(payload);
+    mqttClient.endMessage();
+    
+    DEBUG_PRINT("Notificación enviada [");
+    DEBUG_PRINT(op);
+    DEBUG_PRINTLN("] -> " + status);
 }
 
 #endif

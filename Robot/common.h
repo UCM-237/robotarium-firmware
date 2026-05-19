@@ -99,11 +99,11 @@ short bytesToShort(unsigned char *b) {
 
   extern volatile long countsL;
   extern volatile long countsR;
+  extern volatile long countsL_Last=0;
+  extern volatile long countsR_Last=0;
   extern volatile byte lastStateL;
   extern volatile byte lastStateR;
-  const int MAX_ENCODER_STEPS = 2800;
-
-
+  
 #else
 // --- VARIABLES DE CONTROL DE ENCODER ---
 const int MAX_ENCODER_STEPS = 20; // Resolución física: pasos por vuelta del encoder

@@ -197,6 +197,7 @@
     #define ARDUINO_TYPE_MKR
     #define L 10
     #define TURN_CORRECTION_FACTOR  2.3
+    #define MAX_ENCODER_STEPS 2800
     // Calibración FF y PID específica para este robot
     
   
