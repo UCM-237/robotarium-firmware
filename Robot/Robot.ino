@@ -1326,7 +1326,7 @@ void onMqttMessage(int messageSize){
           }
           else if (part3=="turn"){
             DEBUG_PRINTLN(" Llegó mensaje del topic TURN");
-            double angle = doc["angle"];
+            double angle = doc["ang"];
             DEBUG_PRINT("ang =");
             DEBUG_PRINTLN(angle); 
             op_mqtt_turn_robot(angle);
@@ -1615,6 +1615,7 @@ void envio_datos(double vLineal, double vAngular , double wRight , double wLeft,
     //delay(500);
   }
 }
+// Parámetro angle en grados
 
 void op_mqtt_turn_robot(double angle)
 {
