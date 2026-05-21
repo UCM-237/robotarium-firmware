@@ -99,11 +99,11 @@ short bytesToShort(unsigned char *b) {
 
   extern volatile long countsL;
   extern volatile long countsR;
+  extern volatile long countsL_Last=0;
+  extern volatile long countsR_Last=0;
   extern volatile byte lastStateL;
   extern volatile byte lastStateR;
-  const int MAX_ENCODER_STEPS = 2800;
-
-
+  
 #else
 // --- VARIABLES DE CONTROL DE ENCODER ---
 const int MAX_ENCODER_STEPS = 20; // Resolución física: pasos por vuelta del encoder
@@ -157,6 +157,11 @@ volatile unsigned encodercountLeftAnt= 0;  // Contador de pulsos brutos (izquier
 // --- CONTROL DE MOTORES Y PWM ---
 int PWM_Right=0; // Valor actual de PWM enviado al motor derecho
 int PWM_Left=0;  // Valor actual de PWM enviado al motor izquierdo
+
+//---- CONTROL PRECISO DE GIRO-----
+bool isTurning = false;
+long targetTicks = 0;
+int turnDirection = 1; // 1 para izquierda, -1 para derecha
 
 // Setpoints de velocidad y banderas de dirección (back = marcha atrás)
 double SetpointD, SetpointI, SetpointAnterior=0;

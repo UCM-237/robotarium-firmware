@@ -22,6 +22,8 @@
 // Configuración de macros para depuración por el Monitor Serie
 #define DEBUG_ENABLED  
 #define ENCODER_CUADRATURA
+#define ARDUINO_MKR
+#define SMALL_BOT
 
 #ifdef DEBUG_ENABLED
 #define DEBUG_PRINT(...)   Serial.print(__VA_ARGS__)
@@ -32,27 +34,49 @@
 #endif
 
 // --- CONFIGURACIÓN DEL TEST ---
-double VELOCIDAD_OBJETIVO = 0.01; // rad/s (ajusta según necesites)
-bool TEST_RUEDA_DERECHA =false;   // true para derecha, false para izquierda
+double VELOCIDAD_OBJETIVO = 0.0; // rad/s (ajusta según necesites)
+bool TEST_RUEDA_DERECHA =true;   // true para derecha, false para izquierda
 bool BACKWARDS= false; // true rueda hacia atras, false hacia adelante
 // ------------------------------
 // Uncomment only one
 //#define  AJUSTEFF
 //#define TESTFF
-#define AJUSTEPID
+//#define AJUSTEPID
+#define AJUSTEGIRO
 //------------------------------
 int pwm_output=0;
-double w_objetivo=6.5;
+double w_objetivo=3.5;
 robot miRobot;
 controler PID_RuedaL, PID_RuedaR;
-
-
+double angle=180.0 *M_PI/180.0;
+bool isTurning=false;
+long targetTicks = 0;
+int turnDirection = 1; // 1 para izquierda, -1 para derecha
+const float TURN_CORRECTION_FACTOR = 2.3; // Si gira menos, aumenta este número (ej. 1.3, 1.4)
 /// --- FILTROS Y ESTABILIZACIÓN ---
 // Filtros de media móvil para suavizar las lecturas de velocidad de los encoders (ventana de 10 muestras)
 MeanFilter<double> meanFilterRight(10);
 MeanFilter<double> meanFilterLeft(10);
-
-const double MAX_OPTIMAL_VEL=50; // Límite de seguridad en rad/s
+    #define MINPWM 30
+    #define MAXPWM 255
+    #define VRMIN 3.41
+    #define VLMIN 12.36 
+    
+    
+    // Rueda izquierda
+    #define A_L 9.12
+    #define B_L 18.90
+    #define KP_L 5.0
+    #define KI_L 2.5
+    #define KD_L 0.0
+    // Rueda derecha
+     // Rueda izquierda
+    #define A_R 8.5
+    #define B_R 19.0
+    #define KP_R 4.0
+    #define KI_R 2.5
+    #define KD_R 0.0
+const double MAX_OPTIMAL_VEL=20; // Límite de seguridad en rad/s
 static unsigned long lastMillis = 0, tpwmant=0,lastTime=0;
 static unsigned long ultimaImpresion = 0, cambio_consigna=0;
 void setup() {
@@ -64,12 +88,12 @@ void setup() {
   PID_RuedaL.setSetPoint(VELOCIDAD_OBJETIVO);
   PID_RuedaR.setSetPoint(VELOCIDAD_OBJETIVO);
 
-  PID_RuedaL.setFeedForwardParam(22.81,-69.4);
-  PID_RuedaR.setFeedForwardParam(25.62,-80.0);
+  PID_RuedaL.setFeedForwardParam(A_L,B_L);
+  PID_RuedaR.setFeedForwardParam(A_R,B_R);
   // Paso 2: Solo proporcional (Kp). Ki y Kd a CERO.
   // Un Kp de 2.0 o 5.0 es un buen inicio para motores de bajo coste.
-  PID_RuedaL.setControlerParam(30,5.0,5.0);
-  PID_RuedaR.setControlerParam(50.0,10.0,10.0);
+  PID_RuedaL.setControlerParam(KP_L,KI_L,KD_L);
+  PID_RuedaR.setControlerParam(KP_R,KI_R,KD_R);
   // Configuración de interrupciones para encoders (necesario para calcular w real)
   #ifdef ENCODER_CUADRATURA
     pinMode(miRobot.getPinLeftEncoder(), INPUT_PULLUP); // Canal A Izq
@@ -105,6 +129,8 @@ void setup() {
   }
 
   Serial.println("Objetivo(rad/s),Real(rad/s),PWM");
+  
+
 }
 
 void loop() {
@@ -132,7 +158,7 @@ void loop() {
         // IMPORTANTE: Limitar la velocidad máxima para evitar picos por ruido
     if (instantW_R > MAX_OPTIMAL_VEL) instantW_R = MAX_OPTIMAL_VEL;
     if (instantW_L > MAX_OPTIMAL_VEL) instantW_L = MAX_OPTIMAL_VEL;
-      
+        
     #else
    // 1. Obtener el deltaTime de la ISR (usando sección crítica para evitar que cambie a mitad de lectura)
     noInterrupts();
@@ -144,34 +170,34 @@ void loop() {
     // 2. Calcular la velocidad instantánea
     double instantW_L = 0;
     double instantW_R =0;
-  // 1. Capturamos el tiempo actual
-  unsigned long ahora = micros();
+    // 1. Capturamos el tiempo actual
+    unsigned long ahora = micros();
 
-// 2. Comprobamos si ha pasado mucho tiempo desde el último pulso (ej. 200ms = 200,000 us)
-// Si pasa más de ese tiempo sin interrupciones, la velocidad es 0.
-  if (ahora - timeAfterLeft > 200000000000) {
-    instantW_L = 0;
-  } 
-  else {
-    // Solo calculamos si hay un tiempo válido
-    if (dtL > 0) {
-       instantW_L = (M_PI /10.0) *(encoderL-encodercountLeftAnt)* 1000000 / (deltaTimeLeft );
-       encodercountLeftAnt=encoderL;
+  // 2. Comprobamos si ha pasado mucho tiempo desde el último pulso (ej. 200ms = 200,000 us)
+  // Si pasa más de ese tiempo sin interrupciones, la velocidad es 0.
+    if (ahora - timeAfterLeft > 200000000000) {
+      instantW_L = 0;
+    } 
+    else {
+      // Solo calculamos si hay un tiempo válido
+      if (dtL > 0) {
+         instantW_L = (M_PI /10.0) *(encoderL-encodercountLeftAnt)* 1000000 / (deltaTimeLeft );
+         encodercountLeftAnt=encoderL;
+      }
     }
-  }
-  if (ahora - timeAfterRight > 2000000) {
-    instantW_R = 0;
-  } 
-  else {
-    if (dtR > 0) {
-      instantW_R=(M_PI /10.0) *(encoderR-encodercountRightAnt)* 1000000 / (deltaTimeRight );
-      encodercountRightAnt=encoderR;
+    if (ahora - timeAfterRight > 2000000) {
+      instantW_R = 0;
+    } 
+    else {
+      if (dtR > 0) {
+        instantW_R=(M_PI /10.0) *(encoderR-encodercountRightAnt)* 1000000 / (deltaTimeRight );
+        encodercountRightAnt=encoderR;
+      }
     }
-  }
 
-// 3. Aplicar signo según la dirección (backI, backD)
-  if (backI) instantW_L *= -1.0;
-  if (backD) instantW_R *= -1.0;
+  // 3. Aplicar signo según la dirección (backI, backD)
+    if (backI) instantW_L *= -1.0;
+    if (backD) instantW_R *= -1.0;
 
  #endif
  
@@ -180,7 +206,7 @@ void loop() {
     meanFilterRight.AddValue(instantW_R);
 
     lastMillis = millis();
-  }
+  
   // 4. USAR EL VALOR FILTRADO PARA EL CONTROL Y TELEMETRÍA
     double wLeft = meanFilterLeft.GetFiltered();
     double wRight = meanFilterRight.GetFiltered();
@@ -281,7 +307,7 @@ tpwmant=millis();
 
 
   // Ejecutamos el bucle de control cada 10ms (100Hz) como en tu Robot.ino original
-  if((millis()-tpwmant)>10){
+  //if((millis()-tpwmant)>10){
     
      int pwm_pid=0;
 
@@ -293,10 +319,10 @@ tpwmant=millis();
             pwm_output=constrain(pwm_output,MINPWM,MAXPWM);
             miRobot.moveRightWheel(pwm_output, wRight, BACKWARDS);
             if (millis() - ultimaImpresion > 50) {
-             /* Serial.print("pwm: ");
+              Serial.print("pwm: ");
               Serial.print(pwm_output);
               Serial.print("pwm_pid: ");
-              Serial.print(pwm_pid);*/
+              Serial.print(pwm_pid);
               Serial.print(", w_objetivo: ");
               Serial.print(w_objetivo);
               Serial.print(", w_real: ");
@@ -314,6 +340,7 @@ tpwmant=millis();
             pwm_output= PID_RuedaL.feedForward(); 
             //Serial.print("pwm_FF: ");
             //Serial.print(pwm_output);
+            wLeft=meanFilterLeft.GetFiltered();
             pwm_pid=PID_RuedaL.pid(wLeft);
             pwm_output+=pwm_pid;
             pwm_output=constrain(pwm_output,MINPWM,MAXPWM);
@@ -322,27 +349,93 @@ tpwmant=millis();
             Serial.print(pwm_output);*/
             if (millis() - ultimaImpresion > 250) {
             
-            /*Serial.print("pwm: ");
+            Serial.print("pwm: ");
             Serial.print(pwm_output);
             Serial.print(" pwm_pid: ");
-            Serial.print(pwm_pid);*/
+            Serial.print(pwm_pid);
             Serial.print("w_objetivo: ");
             Serial.print(w_objetivo);
             Serial.print(", w_real: ");
             Serial.println(wLeft);
              ultimaImpresion=millis();
              } 
-            if(millis()-cambio_consigna>10000){
+            if(millis()-cambio_consigna>20000){
               w_objetivo+=1.0;
               cambio_consigna=millis();
             }
          }
-   tpwmant=millis();
-
-  }
-
+   
+  
 #endif
 
+#ifdef AJUSTEGIRO
+ // 4A Caso de giro preciso
+    float distance = abs(angle) * (miRobot.getRobotDiameter()/2.0);
+    
+    // 2. Convertir distancia a ticks de encoder
+    // ticks = (distancia / circunferencia) * pulsos_por_vuelta
+    targetTicks = (distance / (2 * M_PI * miRobot.getRobotWheelRadius())) * MAX_ENCODER_STEPS*TURN_CORRECTION_FACTOR;
+      // Ejecutamos el bucle de control cada 10ms (100Hz) como en tu Robot.ino original
+     
+       int pwm_pid=0;
+      
+        turnDirection = (angle > 0) ? 1 : -1;
+        isTurning = true;
+    
+        
+        DEBUG_PRINT("Angulo:");
+        DEBUG_PRINT(angle);
+        DEBUG_PRINTLN(" Giro iniciado...");
+        DEBUG_PRINT("targetTicks:");
+        DEBUG_PRINTLN(targetTicks);
+        DEBUG_PRINT("CR: ");
+        DEBUG_PRINT(countsR);
+        DEBUG_PRINT("| CL: ");
+        DEBUG_PRINTLN(countsL);
+      
+      if (isTurning) {
+        // Verificamos si ya llegamos al objetivo
+        if (countsR >= targetTicks || countsL >= targetTicks) {
+          // FIN DEL GIRO
+          PID_RuedaL.setSetPoint(0);
+          PID_RuedaR.setSetPoint(0);
+          miRobot.fullStop();
+          isTurning = false;
+          DEBUG_PRINTLN("Giro completado.");
+        } 
+        else {
+          // SEGUIR GIRANDO
+          // Aplicamos una velocidad constante de giro (ej. 10 rad/s)
+          float turningSpeed = 10.0; 
+          DEBUG_PRINT("TurnDirection ");
+          DEBUG_PRINT(turnDirection);
+         
+          if (turnDirection > 0) { // Izquierda
+            PID_RuedaL.setSetPoint(-turningSpeed);
+            PID_RuedaR.setSetPoint(turningSpeed);
+             } 
+          else { // Derecha
+            PID_RuedaL.setSetPoint(turningSpeed);
+            PID_RuedaR.setSetPoint(-turningSpeed);
+          }
+            pwm_output= PID_RuedaR.feedForward();
+            pwm_pid=PID_RuedaR.pid(wRight);
+            pwm_output+=pwm_pid;
+            pwm_output=constrain(pwm_output,MINPWM,MAXPWM);
+            miRobot.moveRightWheel(pwm_output, wRight, BACKWARDS);
+            pwm_output= PID_RuedaL.feedForward();
+            pwm_pid=PID_RuedaL.pid(wLeft);
+            pwm_output+=pwm_pid;
+            pwm_output=constrain(pwm_output,MINPWM,MAXPWM);
+            miRobot.moveLeftWheel(pwm_output, wLeft, BACKWARDS);
+         
+        }
+    }
+  
+    
+#endif
+lastMillis=millis();
+  }
 }
 
 #ifdef ENCODER_CUADRATURA
@@ -411,12 +504,12 @@ void isrLeft() {
 
   // Solo procesamos el pulso si ha pasado suficiente tiempo (TIMEDEBOUNCE)
   // Esto filtra picos de voltaje o vibraciones mecánicas que darían velocidades falsas
- if(ahora-timeAfterLeft >  DEBOUNCE_TIME) {
+ //if(ahora-timeAfterLeft >  DEBOUNCE_TIME) {
     
     encoder_countLeft++;      // Incrementa el contador total de pasos
     deltaTimeLeft = ahora - timeAfterLeft;
     timeAfterLeft=ahora;
-    }
+   // }
 
 }
 
