@@ -1,4 +1,4 @@
-Robotarium Firmware (Arduino) 🤖
+#Robotarium Firmware (Arduino) 🤖
 
 Low-level firmware for the Robotarium agents. This repository manages real-time motor execution, high-resolution quadrature encoder processing, sensor fusion, and MQTT communication for Arduino MKR WiFi 1010 and Nano 33 IoT boards.
 
